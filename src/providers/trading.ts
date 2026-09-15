@@ -11,7 +11,7 @@ import {
   arbitrage, assessSelections, asOdds, asPct, asProb, devig, expectedGoals,
   fitRatings, hedge, kelly, matchModel, round,
   BASE_RATES, brierScore, logLoss, rankedProbabilityScore, type OutcomeIndex,
-  applyMargin, type MarginMethod,
+  applyMargin, edgeRequirements, type MarginMethod,
 } from "../shared/betting-math.js";
 
 // ---------------------------------------------------------------------------
@@ -196,6 +196,37 @@ export function register(server: McpServer): void {
         note: "Posted odds are rounded to the increments books display. `odds_cut_pct` is how far each price sits below its fair value — the only reading that shows who carries the margin. Under the power method the longshot is cut hardest and the favourite barely at all, which is the favourite-longshot bias seen from the bookmaker's side.",
       }),
     ),
+  );
+
+  // 2c. what it would take for this to be profitable
+  server.tool(
+    "trading_edge_requirements",
+    "The conditions a bet has to meet to make money, as arithmetic: the hit rate that breaks even, the hit rate your claimed edge implies, how many bets before that edge is distinguishable from luck, the Kelly stake, the risk of ruin at different staking speeds, and the losing run to expect anyway. Use it before trusting a record, and before sizing anything.",
+    {
+      odds: z.number().gt(1).describe("Decimal odds you are betting at"),
+      edge_pct: z.number().gt(0).max(100).optional().describe("The edge you believe you have, % (default 2 — about what the best documented market biases are worth)"),
+      commission_pct: z.number().min(0).lt(100).optional().describe("Commission on winnings, % (default 0)"),
+      bets_so_far: z.number().int().min(0).optional().describe("How many bets your record covers, if you want it judged against the requirement"),
+    },
+    safe(async ({ odds, edge_pct, commission_pct, bets_so_far }) => {
+      const req = edgeRequirements(odds, edge_pct ?? 2, (commission_pct ?? 0) / 100);
+      return toolResult({
+        ...req,
+        ...(bets_so_far !== undefined ? {
+          your_record: {
+            bets: bets_so_far,
+            verdict: bets_so_far >= req.bets_to_prove.two_sigma
+              ? `${bets_so_far} bets is enough to separate a ${req.claimed_edge_pct}% edge from zero at this price.`
+              : `${bets_so_far} bets cannot show a ${req.claimed_edge_pct}% edge at this price: ${req.bets_to_prove.two_sigma} are needed. Whatever the record says so far, it is consistent with having no edge at all.`,
+          },
+        } : {}),
+        notes: [
+          `Break-even is ${req.break_even_hit_rate_pct}%: below that hit rate the bet loses money however good it feels. A high hit rate is a property of short odds, not of skill.`,
+          "Ruin risk uses the standard fractional-Kelly result and assumes the edge is real and known. If the edge is smaller than you think, every number here is optimistic.",
+          `Expect a losing run of about ${req.expected_longest_losing_run_per_1000} in every 1000 bets at this hit rate, with no edge lost.`,
+        ],
+      });
+    }),
   );
 
   // 3. evaluate a bet — edge, EV, Kelly stake

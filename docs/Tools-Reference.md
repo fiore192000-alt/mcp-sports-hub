@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete list of all **422 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
+Complete list of all **423 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
 
 ---
 
@@ -836,7 +836,7 @@ date: formatted YYYYMMDD
 
 ---
 
-## Trading Toolkit (`trading_`) — 12 tools
+## Trading Toolkit (`trading_`) — 13 tools
 
 Local computation — no API key. `trading_backtest` and `trading_team_ratings` read the keyless football-data.co.uk archive; the rest work entirely on numbers you pass in.
 
@@ -854,3 +854,4 @@ Local computation — no API key. `trading_backtest` and `trading_team_ratings` 
 | `trading_predict_fixtures` | Predict upcoming football fixtures: fits team ratings on the season so far, prices every match in the next few days (1X2, over/under), compares against the bookmakers' own prices and flags where the model disagrees enough to bet. Returns prediction rows you can feed straight back into trading_score_predictions once the matches are played. | leagues?, season?, include_previous_season?, half_life_days?, prior_matches?, rho?, book?, days_ahead?, min_edge_pct?, markets?, bankroll?, kelly_fraction?, max_stake_pct?, limit? |
 | `trading_score_predictions` | Score predictions you made earlier against what actually happened: hit rate, ranked probability score and log loss, measured against the bookmakers' own prices as the benchmark, plus calibration and the P&L and closing-line value of any picks. Feed it the `predictions` array from trading_predict_fixtures. | **predictions**, season?, commission_pct?, sample? |
 | `trading_price_market` | Turn fair probabilities into the odds a bookmaker would display, by adding a margin rather than removing one. The inverse of trading_devig_odds. Use it to see what your model's probabilities look like as posted prices, or to check how far a real book's prices sit from your own. | **probabilities**, names?, margin_pct?, method? |
+| `trading_edge_requirements` | The conditions a bet has to meet to make money, as arithmetic: the hit rate that breaks even, the hit rate your claimed edge implies, how many bets before that edge is distinguishable from luck, the Kelly stake, the risk of ruin at different staking speeds, and the losing run to expect anyway. Use it before trusting a record, and before sizing anything. | **odds**, edge_pct?, commission_pct?, bets_so_far? |

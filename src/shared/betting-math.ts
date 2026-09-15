@@ -775,3 +775,72 @@ export function applyMargin(
     }),
   };
 }
+
+// ---------------------------------------------------------------------------
+// What it takes to be profitable, as arithmetic
+// ---------------------------------------------------------------------------
+
+export interface EdgeRequirements {
+  odds: number;
+  effective_odds: number;
+  claimed_edge_pct: number;
+  break_even_hit_rate_pct: number;
+  required_hit_rate_pct: number;
+  /** Bets needed before the claimed edge is distinguishable from zero. */
+  bets_to_prove: { one_sigma: number; two_sigma: number; three_sigma: number };
+  kelly: { full_pct: number; quarter_pct: number };
+  /** Probability of the bankroll ever falling to a fraction of its start. */
+  ruin_risk: Array<{ drawdown_pct: number; full_kelly: number; half_kelly: number; quarter_kelly: number }>;
+  /** How long a losing run to expect over a season of this many bets. */
+  expected_longest_losing_run: (bets: number) => number;
+}
+
+/**
+ * The conditions a bet has to meet to make money, computed rather than asserted.
+ *
+ * Two numbers here tend to end arguments. The break-even hit rate says what
+ * fraction you must win simply to lose nothing — at 1.30 it is 77%, which is
+ * why a 70% hit rate can be a losing system. And `bets_to_prove` says how long
+ * before a record means anything: a 2% edge at short odds needs thousands of
+ * bets before it separates from noise, which is longer than most bankrolls or
+ * most patience last.
+ */
+export function edgeRequirements(
+  odds: number,
+  claimedEdgePct: number,
+  commission = 0,
+): Omit<EdgeRequirements, "expected_longest_losing_run"> & { expected_longest_losing_run_per_1000: number } {
+  if (!(odds > 1)) throw new Error(`Invalid decimal odds: ${odds}`);
+  const eff = netOdds(odds, commission);
+  const breakEven = 1 / eff;
+  const edge = claimedEdgePct / 100;
+  // ROI = p*eff - 1, so the hit rate that delivers the claimed edge is:
+  const required = (1 + edge) / eff;
+  if (required >= 1) {
+    throw new Error(`An edge of ${claimedEdgePct}% at odds ${odds} would need a hit rate above 100%`);
+  }
+  const sd = Math.sqrt(required * (1 - required)) * eff;
+  const betsFor = (sigma: number) => Math.ceil((sigma * sd / edge) ** 2);
+
+  const fullKelly = kelly(odds, required, commission);
+  // Standard fractional-Kelly result: betting k times the Kelly stake, the
+  // chance of the bank ever touching a fraction a of its start is a^(2/k - 1).
+  const ruinAt = (a: number, k: number) => Math.min(1, a ** (2 / k - 1));
+
+  return {
+    odds: asOdds(odds),
+    effective_odds: asOdds(eff),
+    claimed_edge_pct: round(claimedEdgePct, 3),
+    break_even_hit_rate_pct: asPct(breakEven),
+    required_hit_rate_pct: asPct(required),
+    bets_to_prove: { one_sigma: betsFor(1), two_sigma: betsFor(2), three_sigma: betsFor(3) },
+    kelly: { full_pct: asPct(fullKelly), quarter_pct: asPct(fullKelly / 4) },
+    ruin_risk: [0.5, 0.25, 0.1].map((a) => ({
+      drawdown_pct: asPct(1 - a),
+      full_kelly: asProb(ruinAt(a, 1)),
+      half_kelly: asProb(ruinAt(a, 0.5)),
+      quarter_kelly: asProb(ruinAt(a, 0.25)),
+    })),
+    expected_longest_losing_run_per_1000: round(Math.log(1000) / Math.log(1 / (1 - required)), 1),
+  };
+}

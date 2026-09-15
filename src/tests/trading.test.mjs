@@ -22,7 +22,7 @@ process.env.SPORTS_HUB_DATA_DIR = join(__dirname, "fixtures", "no-such-dir");
 
 const {
   devig, kelly, arbitrage, hedge, matchModel, fitRatings, expectedGoals, assessSelections,
-  applyMargin, tickOdds,
+  applyMargin, tickOdds, edgeRequirements,
 } = await import(dist("shared/betting-math.js"));
 const { fetchLeagueSeason, parseCsv, parseFdDate, priceFor, toFixtures, toMatches } = await import(dist("shared/football-csv.js"));
 const trading = await import(dist("providers/trading.js"));
@@ -1025,5 +1025,50 @@ describe("pricing a market", () => {
     assert.equal(tickOdds(3.4713), 3.45);
     assert.equal(tickOdds(7.4713), 7.4);
     assert.equal(tickOdds(23.4713), 23);
+  });
+});
+
+describe("what profitability requires", () => {
+  it("break-even is the implied probability, and the required hit rate follows the edge", () => {
+    const r = edgeRequirements(1.3, 2);
+    close(r.break_even_hit_rate_pct, 100 / 1.3, 0.01, "break-even at 1.30");
+    close(r.required_hit_rate_pct, (1.02 / 1.3) * 100, 0.01, "2% edge at 1.30");
+    // The number that ends arguments: 70% is a losing hit rate at this price.
+    assert.ok(r.break_even_hit_rate_pct > 70);
+  });
+
+  it("needs more bets to prove a smaller edge, quadratically", () => {
+    const small = edgeRequirements(1.3, 2).bets_to_prove.two_sigma;
+    const big = edgeRequirements(1.3, 4).bets_to_prove.two_sigma;
+    assert.ok(small > 2000, `a 2% edge at 1.30 needs thousands of bets, got ${small}`);
+    close(small / big, 4, 0.3, "halving the edge quadruples the bets needed");
+    const r = edgeRequirements(1.3, 2);
+    assert.ok(r.bets_to_prove.three_sigma > r.bets_to_prove.two_sigma);
+    close(r.bets_to_prove.three_sigma / r.bets_to_prove.two_sigma, 2.25, 0.05, "sigma scales as the square");
+  });
+
+  it("needs far more bets at long odds than short ones", () => {
+    assert.ok(edgeRequirements(6, 2).bets_to_prove.two_sigma > 5 * edgeRequirements(1.3, 2).bets_to_prove.two_sigma);
+  });
+
+  it("gives the textbook ruin risks for fractional Kelly", () => {
+    const r = edgeRequirements(2, 5).ruin_risk.find((x) => x.drawdown_pct === 50);
+    close(r.full_kelly, 0.5, 1e-6, "full Kelly halves the bank half the time");
+    close(r.half_kelly, 0.125, 1e-6);
+    close(r.quarter_kelly, 0.5 ** 7, 1e-6);
+  });
+
+  it("judges a record against what it would take to mean anything", async () => {
+    const tools = new Map();
+    trading.register({ tool: (name, description, schema, handler) => tools.set(name, handler) });
+    const result = await tools.get("trading_edge_requirements")({ odds: 1.3, edge_pct: 2, bets_so_far: 200 });
+    const data = JSON.parse(result.content[0].text);
+    assert.match(data.your_record.verdict, /cannot show|consistent with having no edge/);
+    const enough = JSON.parse((await tools.get("trading_edge_requirements")({ odds: 1.3, edge_pct: 2, bets_so_far: 5000 })).content[0].text);
+    assert.match(enough.your_record.verdict, /is enough/);
+  });
+
+  it("refuses an edge that would need winning more than always", () => {
+    assert.throws(() => edgeRequirements(1.05, 20), /above 100%/);
   });
 });
