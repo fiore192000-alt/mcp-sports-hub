@@ -93,6 +93,7 @@ By default this loads the `free` preset (21 no-key providers, 183 tools) with ze
 - **[Data Sources](Data-Sources.md)** — What was searched, what is reachable, and the input that is missing
 - **[Beating the Market](Beating-The-Market.md)** — Whether any of this could beat the best traders on an exchange, and the scoreboard that would prove it
 - **[Thinking Like a Book](Thinking-Like-A-Book.md)** — How bookmakers price, why a 70% hit rate loses money, and the arithmetic of being profitable
+- **[The Price of the Best Price](The-Price-Of-The-Best-Price.md)** — What line shopping is really worth, why 95.7% of it is taken back, and how much of the rest is left in 2026
 - **[Evaluation](Evaluation.md)** — The forecasting model measured over 19,062 real matches: skill, calibration, and what it still does not prove
 - **[Predicting](Predicting.md)** — Predict a round, score the predictions against the market, week after week
 - **[Providers](Providers.md)** — Detailed reference for all 44 providers with full tool lists

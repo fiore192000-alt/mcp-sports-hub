@@ -188,9 +188,26 @@ average return -1.2%. One bet placed lazily at the average price costs roughly
 what one and a half bets at the best price earn. This is not a strategy with a
 price-shopping bonus — the price shopping *is* the strategy.
 
-So: 793 bets a year, two or three a day, every day, each placed within minutes
-of the opening price across a dozen accounts, for 16-32% of a bankroll before
-tax, with a 20% chance of a losing year and a limit notice at the end of it.
-That is the best this data supports. Whether it is worth doing is not a
-question the data can answer — but it should be answered with those numbers in
-front of you, not with a hit rate.
+So: 793 bets a year, two or three a day, every day, each placed at the best
+price across a dozen accounts, for 16-32% of a bankroll before tax, with a 20%
+chance of a losing year and a limit notice at the end of it. That is the best
+this data supports. Whether it is worth doing is not a question the data can
+answer — but it should be answered with those numbers in front of you, not with
+a hit rate.
+
+### Two corrections to the paragraph above
+
+An earlier version of this page said to place "within minutes of the opening
+price". **A later measurement says the opposite.** On 1,186 matches across 22
+divisions with nine named bookmakers quoting both an opening and a closing
+price, the best *opening* price has a closing-line value of **-0.77%** while
+the best *closing* price has **+1.58%**. Waiting is worth 2.35 points over
+anticipating. The folklore is wrong, at least on this month.
+
+And the "best available price" is half the time the Betfair Exchange **gross of
+commission**. Net of 5% it adds nothing over the best bookmaker, and a 5%
+commission is exactly the erosion that takes this edge from +2.23% to +0.94%.
+
+Both are measured in [The Price of the Best Price](The-Price-Of-The-Best-Price.md),
+along with the reason chasing a price far above consensus is the one thing the
+data punishes monotonically.

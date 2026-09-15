@@ -6,6 +6,40 @@ All notable changes to this project are documented here. This project follows [s
 
 Context cost, multi-client correctness, and a football trading toolkit.
 
+### Measured — what the best available price is actually worth
+
+New page: [docs/The-Price-Of-The-Best-Price.md](docs/The-Price-Of-The-Best-Price.md).
+Three independent measurements on two non-overlapping datasets, asking what it
+would be worth to bet at any price, only when you choose, at any stake.
+
+- **Line shopping recovers 5.30 of the market's 6.6 points of margin and stops.**
+  Backing every outcome at the best quote returns -2.24% +/- 0.12 over 433,395
+  legs; you would need to beat the listed best price by 2.29% to reach zero.
+- **95.7% of the extra price is taken back by adverse selection.** Sorted into
+  dispersion deciles within odds bands, selections where the best quote sits
+  furthest above consensus underperform their implied probability by 1.39pp
+  (z = -6.94). Going from the lowest to the highest decile buys 12.37 points of
+  extra gross price and 0.53 points of return. The outlier book is sharp.
+- **The best opening price does not beat the close.** On 1,186 matches with nine
+  named books quoting open and close, CLV is -0.77% at the open against +1.58%
+  at the close. This corrects the advice in Thinking-Like-A-Book section 7, which
+  said to place within minutes of the opening price.
+- **Half the best prices are an exchange gross of commission.** Net of 5% the
+  Betfair Exchange adds nothing over the best bookmaker, and 5% is the erosion
+  that takes the surviving short-favourite edge from +2.23% to +0.94%.
+- **Selectivity on the de-vigged consensus does not work at any threshold.**
+  Largest validation t-statistic 0.93 against a Bonferroni bar of 3.08. Along the
+  way: multiplicative de-vig overstates longshots by 36% relative and manufactures
+  the result; power de-vig is the best calibrated of the three on this data.
+- **Soft leagues are the wrong place to look.** The big five have a lower
+  best-price overround (1.0054 against 1.0161) and better returns in both periods.
+- **The window is closing.** Between-book dispersion has fallen monotonically for
+  twenty years; since 2014-15 the best price has decayed 0.25pp per season and
+  arbitrage in this panel extrapolates to zero by 2027-28.
+- **Streaks match chance.** Longest observed winning run 7 against a chance median
+  of 9; P(chance >= observed) = 0.999. The useful number is the longest losing run,
+  29, which is what a bankroll has to survive.
+
 ### Added — `trading_` provider (11 tools, no API key)
 
 Predicts matches, scores those predictions honestly, turns prices into positions, and lets you test an idea on history before staking anything:
