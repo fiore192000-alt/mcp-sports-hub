@@ -73,7 +73,7 @@ Uses the **stdio transport** from the [MCP SDK](https://modelcontextprotocol.io)
 
 **Requirements**: Node.js 18+, npm.
 
-## Providers (43)
+## Providers (44)
 
 ### Works instantly — no API key, no signup (21 providers, 181 tools)
 
@@ -441,6 +441,8 @@ src/
 │   ├── projection.ts           # field projection used by the pipeline
 │   ├── slim.ts                 # strips $schema boilerplate from tools/list
 │   ├── betting-math.ts         # de-vig, EV/Kelly, arbitrage, hedging, Poisson, team ratings
+│   ├── football-source.ts      # source resolution: odds archive first, keyless mirror as fallback
+│   ├── openfootball.ts         # keyless GitHub-hosted results/calendar mirror (no odds)
 │   ├── football-csv.ts         # football-data.co.uk archive: parsing + odds columns
 │   ├── resources.ts            # MCP resources (provider/preset catalogs)
 │   └── prompts.ts              # MCP prompts (curated workflows)

@@ -702,23 +702,6 @@ Sports Hub aggregates **44 independent sports API providers** into one MCP serve
 
 ---
 
-## 44. Polymarket
-
-| | |
-|---|---|
-| **Prefix** | `polymarket_` |
-| **Tools** | 5 |
-| **API Base** | `https://gamma-api.polymarket.com` + `https://clob.polymarket.com` |
-| **Auth** | None for reading |
-| **Rate Limits** | Fair use |
-| **Sports** | Whatever the market lists — football coverage concentrates on big matches |
-
-**Tools:** `polymarket_get_markets`, `polymarket_get_market`, `polymarket_get_order_book`, `polymarket_compare_to_book`, `polymarket_explain`
-
-**Caveats:** Written from the public API shape and never called from the session that wrote it; run `npm run verify:sources` before trusting the field mapping. An exchange removes the bookmaker's margin and the account limits, but liquidity becomes the binding constraint, and the edge measured in [Evaluation](Evaluation.md) does not transfer — it is a disagreement between bookmakers, and this is a single venue.
-
----
-
 ## 42. Lumify
 
 | | |
@@ -748,3 +731,22 @@ Sports Hub aggregates **44 independent sports API providers** into one MCP serve
 **Tools:** `trading_list_strategies`, `trading_devig_odds`, `trading_evaluate_bet`, `trading_find_arbitrage`, `trading_hedge_position`, `trading_poisson_model`, `trading_team_ratings`, `trading_backtest`, `trading_closing_line_value`, `trading_predict_fixtures`, `trading_score_predictions`, `trading_price_market`, `trading_edge_requirements`
 
 **Caveats:** A backtest assumes you got the listed price on every qualifying match, with no stake limits and no line movement. Separate closing-odds columns only exist from season 2019/20 onward; earlier seasons fall back to the single published price and the result says so. Treat a profitable run as a hypothesis to confirm out-of-sample, not a signal.
+
+---
+
+## 44. Polymarket
+
+| | |
+|---|---|
+| **Prefix** | `polymarket_` |
+| **Tools** | 5 |
+| **API Base** | `https://gamma-api.polymarket.com` + `https://clob.polymarket.com` |
+| **Auth** | None for reading |
+| **Rate Limits** | Fair use |
+| **Sports** | Whatever the market lists — football coverage concentrates on big matches |
+
+**Tools:** `polymarket_get_markets`, `polymarket_get_market`, `polymarket_get_order_book`, `polymarket_compare_to_book`, `polymarket_explain`
+
+**Caveats:** Written from the public API shape and never called from the session that wrote it; run `npm run verify:sources` before trusting the field mapping. An exchange removes the bookmaker's margin and the account limits, but liquidity becomes the binding constraint, and the edge measured in [Evaluation](Evaluation.md) does not transfer — it is a disagreement between bookmakers, and this is a single venue.
+
+---

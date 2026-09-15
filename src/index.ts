@@ -71,7 +71,7 @@ const PROVIDERS: Record<string, () => Promise<{ register: (s: McpServer) => void
 // ---------------------------------------------------------------------------
 // SPORTS_HUB_PROVIDERS controls which providers to load.
 //
-//   Not set / empty    → load "free" preset (19 providers, ~165 tools)
+//   Not set / empty    → load "free" preset (21 providers, 181 tools)
 //   "all"              → load ALL 44 providers (428 tools)
 //   "espn,nhl,mlb"     → load only these 3 (36 tools)
 //   "-odds,-oddsio"    → load all EXCEPT these (prefix with -)
