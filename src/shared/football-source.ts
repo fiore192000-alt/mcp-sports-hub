@@ -13,7 +13,7 @@
  */
 
 import { type Book, type FdFixture, type FdMatch, fetchLeagueSeason, toMatches } from "./football-csv.js";
-import { fetchOpenFootballSeason } from "./openfootball.js";
+import { type SeasonCoverage, fetchOpenFootballSeason } from "./openfootball.js";
 
 export type Source = "auto" | "footballdata" | "openfootball";
 
@@ -23,6 +23,8 @@ export interface SeasonData {
   fixtures: FdFixture[];
   used: "footballdata" | "openfootball";
   note?: string;
+  /** Only the mirror can report this: the CSV archive holds played matches only. */
+  coverage?: SeasonCoverage;
 }
 
 export function short(err: unknown): string {

@@ -6,6 +6,7 @@
  * and a network connection: no MCP client, no API key.
  *
  *   node scripts/season-tracker.mjs predict  --leagues I1,E0 [--days 10]
+ *                                            [--supersede "why the old ones are wrong"]
  *   node scripts/season-tracker.mjs score    --leagues I1,E0
  *   node scripts/season-tracker.mjs hindcast --leagues I1 [--min-history 4]
  *
@@ -66,12 +67,30 @@ const pct = (x) => `${(x * 100).toFixed(0)}%`;
 // ---------------------------------------------------------------------------
 
 async function predict() {
+  const supersede = flag("supersede", null);
   for (const league of leagues) {
     const data = await call("trading_predict_fixtures", {
       leagues: league, source, days_ahead: Number(flag("days", 10)), limit: 40,
     });
     const log = await readLog(league, data.season);
-    const known = new Set(log.predictions.map(keyOf));
+
+    // Superseding is for a broken model or broken input, never for a result
+    // you did not like: only predictions on matches still ahead of us can be
+    // retired, the old row stays in the log, and the reason is recorded.
+    let retired = 0;
+    if (supersede) {
+      const stillAhead = new Set((data.predictions ?? []).map(keyOf));
+      const at = new Date().toISOString();
+      for (const p of log.predictions) {
+        if (!p.superseded_at && stillAhead.has(keyOf(p))) {
+          p.superseded_at = at;
+          p.superseded_reason = supersede;
+          retired++;
+        }
+      }
+    }
+
+    const known = new Set(log.predictions.filter((p) => !p.superseded_at).map(keyOf));
     const made = new Date().toISOString();
     const fresh = (data.predictions ?? [])
       .filter((p) => !known.has(keyOf(p)))
@@ -82,6 +101,8 @@ async function predict() {
     await writeLog(log);
 
     console.log(`\n=== ${league} ${data.season} — ${fresh.length} new prediction(s), ${log.predictions.length} in the log ===`);
+    if (retired) console.log(`superseded ${retired} earlier prediction(s), kept in the log: ${supersede}`);
+    if (data.data_quality) console.log(`data quality: ${JSON.stringify(data.data_quality)}`);
     if (data.market_data === false) console.log(`(no odds from this source — probabilities only)`);
     for (const p of fresh) {
       console.log(`${p.date} ${p.time ?? "     "}  ${p.home.padEnd(24)} v ${p.away.padEnd(24)} ` +
@@ -102,7 +123,7 @@ async function score() {
       continue;
     }
     const report = await call("trading_score_predictions", {
-      predictions: log.predictions.map(({ date, league: lg, home, away, prob_home, prob_draw, prob_away, market_odds, pick }) => ({
+      predictions: log.predictions.filter((p) => !p.superseded_at).map(({ date, league: lg, home, away, prob_home, prob_draw, prob_away, market_odds, pick }) => ({
         date, league: lg ?? league, home, away, prob_home, prob_draw, prob_away,
         ...(market_odds ? { market_odds } : {}), ...(pick ? { pick } : {}),
       })),

@@ -19,7 +19,7 @@ const dist = (p) => join(__dirname, "..", "..", "dist", p);
 const {
   devig, kelly, arbitrage, hedge, matchModel, fitRatings, expectedGoals, assessSelections,
 } = await import(dist("shared/betting-math.js"));
-const { parseCsv, parseFdDate, priceFor, toMatches } = await import(dist("shared/football-csv.js"));
+const { parseCsv, parseFdDate, priceFor, toFixtures, toMatches } = await import(dist("shared/football-csv.js"));
 const trading = await import(dist("providers/trading.js"));
 const { seasonPath, fetchOpenFootballSeason } = await import(dist("shared/openfootball.js"));
 const { loadSeasonData } = await import(dist("shared/football-source.js"));
@@ -652,7 +652,8 @@ describe("predicting and scoring (stubbed CSVs)", () => {
     });
     assert.equal(data.scored, 1);
     assert.equal(data.pending_count, 1);
-    assert.match(data.pending[0].status, /not played, or a name mismatch/);
+    assert.match(data.pending[0].status, /not in the source at all/,
+      "an unknown fixture is named as such, not lumped in with matches still to come");
   });
 
   it("the round trip works: predictions feed straight into scoring", async () => {
@@ -811,5 +812,86 @@ describe("predicting without odds", () => {
     assert.equal(data.already_played_skipped, 1);
     assert.match(data.already_played_note, /worthless|skipped/);
     assert.ok(!data.predictions.some((p) => p.date === day(-2)));
+  });
+});
+
+describe("robustness against malformed input", () => {
+  const tools = new Map();
+  before(() => { trading.register({ tool: (name, description, schema, handler) => tools.set(name, handler) }); });
+
+  const callRaw = async (name, args) => {
+    const result = await tools.get(name)(args);
+    return { isError: result.isError === true, text: result.content[0].text };
+  };
+
+  it("turns a bad price into an error, not a NaN", async () => {
+    for (const odds of [[1, 3, 4], [0, 3, 4], [-2, 3, 4], [Number.NaN, 3, 4], [Infinity, 3, 4]]) {
+      const r = await callRaw("trading_devig_odds", { odds });
+      assert.equal(r.isError, true, `odds ${JSON.stringify(odds)} should be rejected`);
+      assert.match(r.text, /Invalid decimal odds|At least 2 outcomes/);
+    }
+  });
+
+  it("never emits NaN or Infinity anywhere in a result", async () => {
+    // JSON.stringify turns NaN and Infinity into null, so scanning the text
+    // would miss them. The un-serialized payload is hung off the result under
+    // a symbol for exactly this kind of inspection.
+    const RAW = Symbol.for("sports-hub.rawPayload");
+    const walk = (value, path, seen) => {
+      if (typeof value === "number") {
+        assert.ok(Number.isFinite(value), `non-finite number at ${path}: ${value}`);
+      } else if (value && typeof value === "object") {
+        assert.ok(!seen.has(value), `cycle at ${path}`);
+        seen.add(value);
+        for (const [key, inner] of Object.entries(value)) walk(inner, `${path}.${key}`, seen);
+      }
+    };
+    const cases = [
+      ["trading_devig_odds", { odds: [1.001, 500, 1000], method: "shin" }],
+      ["trading_evaluate_bet", { selections: [{ name: "longshot", odds: 1000, probability: 0.000001 }] }],
+      ["trading_poisson_model", { home_xg: 0.01, away_xg: 9 }],
+      ["trading_hedge_position", { side: "back", stake: 0.01, odds: 1.01, hedge_odds: 1000, commission_pct: 99 }],
+      ["trading_find_arbitrage", { outcomes: Array.from({ length: 20 }, (_, i) => ({ name: `o${i}`, odds: 1.01 + i })) }],
+    ];
+    for (const [name, args] of cases) {
+      const result = await tools.get(name)(args);
+      assert.notEqual(result.isError, true, result.content[0].text);
+      walk(result[RAW], name, new Set());
+      JSON.parse(result.content[0].text);
+    }
+  });
+
+  it("survives a CSV that is only a header, or junk", () => {
+    assert.deepEqual(parseCsv("Date,HomeTeam,AwayTeam\n"), []);
+    assert.deepEqual(parseCsv(""), []);
+    assert.deepEqual(parseCsv("\n\n\n"), []);
+    assert.deepEqual(toMatches(parseCsv("Date,HomeTeam\n17/08/24,Arsenal\n"), "E0", "2425"), []);
+  });
+
+  it("keeps a played match out of the upcoming-fixtures list", () => {
+    const rows = parseCsv([
+      "Div,Date,HomeTeam,AwayTeam,FTR,AvgH,AvgD,AvgA",
+      "E0,17/08/24,Arsenal,Chelsea,H,2.0,3.4,4.0",
+      "E0,24/08/99,Arsenal,Everton,,2.0,3.4,4.0",
+      "",
+    ].join("\n"));
+    const fixtures = toFixtures(rows, "avg", ["E0"]);
+    assert.equal(fixtures.length, 1, "a row carrying a result is not a fixture");
+    assert.equal(fixtures[0].away, "Everton");
+  });
+
+  it("scores a duplicated prediction once per copy, without crashing", async () => {
+    const one = { date: "2024-08-17", league: "E0", home: "A", away: "B", prob_home: 0.5, prob_draw: 0.25, prob_away: 0.25 };
+    const r = await callRaw("trading_score_predictions", { predictions: [one, { ...one }], season: "9401", source: "footballdata" });
+    assert.equal(r.isError, false, r.text);
+    const data = JSON.parse(r.text);
+    assert.equal(data.scored + data.pending_count, 2);
+  });
+
+  it("names a league the mirror does not carry", async () => {
+    const r = await callRaw("trading_predict_fixtures", { leagues: "ZZ", season: "2627", source: "openfootball" });
+    const data = JSON.parse(r.text.replace(/^Error: /, ""));
+    const text = JSON.stringify(data);
+    assert.match(text, /no mapping for league|no data/i);
   });
 });

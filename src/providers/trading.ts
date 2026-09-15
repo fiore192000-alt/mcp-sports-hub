@@ -824,6 +824,7 @@ export function register(server: McpServer): void {
       const fits = new Map<string, RatingsFit>();
       const ratingNotes: string[] = [];
       const sourcesUsed = new Set<string>();
+      const coverage: Record<string, unknown> = {};
       const seasons = includePrevious ? [previousSeason(season), season] : [season];
       const perLeagueFixtures: FdFixture[] = [];
       let fdFixtures: FdFixture[] | undefined;
@@ -838,6 +839,7 @@ export function register(server: McpServer): void {
             used = data.used;
             sourcesUsed.add(data.used);
             if (data.note) ratingNotes.push(data.note);
+            if (data.coverage && data.coverage.missing_results > 0) coverage[`${league} ${code}`] = data.coverage;
             for (const m of data.played) {
               rated.push({ home: m.home, away: m.away, homeGoals: m.homeGoals, awayGoals: m.awayGoals, ts: m.ts });
             }
@@ -995,6 +997,10 @@ export function register(server: McpServer): void {
         model: { half_life_days: args.half_life_days ?? 240, rho, book, min_edge_pct: minEdge, markets },
         fixtures_priced: predictions.length,
         picks_suggested: withPick.length,
+        ...(Object.keys(coverage).length ? {
+          data_quality: coverage,
+          data_quality_note: "These seasons have matches whose date has passed with no result recorded — holes in the source, not lag. Ratings were fitted on what exists, and predictions on those matches can never be settled.",
+        } : {}),
         ...(stale.length ? {
           already_played_skipped: stale.length,
           already_played_note: "Fixtures dated before today with no result recorded yet were skipped — the source lags a few days, and a 'prediction' made after kick-off is worthless.",
@@ -1050,6 +1056,7 @@ export function register(server: McpServer): void {
       const needed = new Set(predictions.map((p) => `${p.league.toUpperCase()}|${season ?? seasonForDate(p.date)}`));
       if (needed.size > 20) return errorResult(`These predictions span ${needed.size} league-seasons, over the 20-file cap. Score them in batches.`);
       const results = new Map<string, FdMatch>();
+      const scheduled = new Map<string, number>();
       const unavailable: string[] = [];
       const sourcesUsed = new Set<string>();
       for (const key of needed) {
@@ -1059,6 +1066,11 @@ export function register(server: McpServer): void {
           sourcesUsed.add(data.used);
           for (const m of data.played) {
             results.set(`${league}|${normalizeTeam(m.home)}|${normalizeTeam(m.away)}`, m);
+          }
+          // Keep the unplayed ones too, so a pending prediction can say whether
+          // the match is still ahead or the source simply never recorded it.
+          for (const f of data.fixtures) {
+            scheduled.set(`${league}|${normalizeTeam(f.home)}|${normalizeTeam(f.away)}`, f.ts);
           }
         } catch (err) {
           unavailable.push(`${league} ${code} (${short(err)})`);
@@ -1092,7 +1104,14 @@ export function register(server: McpServer): void {
         const league = p.league.toUpperCase();
         const match = results.get(`${league}|${normalizeTeam(p.home)}|${normalizeTeam(p.away)}`);
         if (!match) {
-          pending.push({ date: p.date, league, match: `${p.home} v ${p.away}`, status: "no result in the archive yet (not played, or a name mismatch)" });
+          const key = `${league}|${normalizeTeam(p.home)}|${normalizeTeam(p.away)}`;
+          const kickoff = scheduled.get(key);
+          const status = kickoff === undefined
+            ? "not in the source at all — check the team names match the source you predicted from"
+            : kickoff > Date.now() - 3 * 86_400_000
+              ? "not played yet"
+              : "played, but the source never recorded a result — this prediction can never be settled";
+          pending.push({ date: p.date, league, match: `${p.home} v ${p.away}`, status });
           continue;
         }
         const actual: 0 | 1 | 2 = match.result === "H" ? 0 : match.result === "D" ? 1 : 2;
@@ -1160,6 +1179,8 @@ export function register(server: McpServer): void {
       if (n === 0) {
         return toolResult({
           scored: 0,
+          pending_count: pending.length,
+          source: [...sourcesUsed],
           pending,
           ...(unavailable.length ? { unavailable } : {}),
           note: `None of these predictions has a result yet${sourcesUsed.size ? ` in ${[...sourcesUsed].join("/")}` : ""}. Come back after the matches are played — or check that the team names match the source you predicted from: the two sources spell them differently ("Inter" vs "FC Internazionale Milano"), and trading_predict_fixtures emits whichever form its source uses.`,

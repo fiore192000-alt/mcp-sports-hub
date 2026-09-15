@@ -40,8 +40,28 @@ export function seasonPath(code: string): string {
   return `${century + start}-${String(end).padStart(2, "0")}`;
 }
 
-interface OfScore { ft?: [number, number]; ht?: [number, number] }
-interface OfMatch { round?: string; date?: string; time?: string; team1?: string; team2?: string; score?: OfScore }
+interface OfMatch { round?: string; date?: string; time?: string; team1?: string; team2?: string; score?: unknown }
+
+/**
+ * The full-time score, whichever way this file spells it.
+ *
+ * The mirror is not schema-stable: most matches carry `{"ft":[h,a],"ht":[…]}`,
+ * but some carry a bare `[h,a]`. In Serie A 2025-26 that bare form is used for
+ * 36 matches — every single 0-0 of the season. Reading only `.ft` silently
+ * dropped all of them, which biased ratings against goalless football and
+ * showed up as a model that under-predicted draws. Accept both shapes.
+ */
+function fullTime(score: unknown): [number, number] | undefined {
+  const pair = Array.isArray(score)
+    ? score
+    : score && typeof score === "object"
+      ? (score as { ft?: unknown }).ft
+      : undefined;
+  if (Array.isArray(pair) && pair.length === 2 && Number.isInteger(pair[0]) && Number.isInteger(pair[1])) {
+    return [pair[0] as number, pair[1] as number];
+  }
+  return undefined;
+}
 
 /**
  * Fetch one league-season and split it into played matches and remaining
@@ -51,11 +71,29 @@ interface OfMatch { round?: string; date?: string; time?: string; team1?: string
  * Prices are empty: this source has no odds. Callers must handle that rather
  * than assume a market price is always there.
  */
+export interface SeasonCoverage {
+  total: number;
+  played: number;
+  /** Dated ahead of the cutoff — genuinely still to come. */
+  upcoming: number;
+  /** Dated in the past with no score: the source never recorded the result. */
+  missing_results: number;
+  missing_examples?: string[];
+  last_result_date?: string;
+}
+
+/**
+ * How long after kick-off a missing result is still just lag rather than a
+ * hole. The mirrors run a few days behind; beyond that the result is not
+ * coming on its own.
+ */
+const LAG_DAYS = 3;
+
 export async function fetchOpenFootballSeason(
   league: string,
   season: string,
   _book: Book = "avg",
-): Promise<{ played: FdMatch[]; fixtures: FdFixture[]; url: string }> {
+): Promise<{ played: FdMatch[]; fixtures: FdFixture[]; url: string; coverage: SeasonCoverage }> {
   const entry = OF_LEAGUES[league.toUpperCase()];
   if (!entry) {
     throw new Error(`openfootball has no mapping for league "${league}". Supported: ${Object.keys(OF_LEAGUES).join(", ")}`);
@@ -70,8 +108,8 @@ export async function fetchOpenFootballSeason(
     if (!m.date || !m.team1 || !m.team2) continue;
     const ts = Date.parse(`${m.date}T00:00:00Z`);
     if (!Number.isFinite(ts)) continue;
-    const ft = m.score?.ft;
-    if (ft && Number.isInteger(ft[0]) && Number.isInteger(ft[1])) {
+    const ft = fullTime(m.score);
+    if (ft) {
       played.push({
         league: league.toUpperCase(), season,
         date: m.date, ts,
@@ -93,5 +131,20 @@ export async function fetchOpenFootballSeason(
   }
   played.sort((a, b) => a.ts - b.ts);
   fixtures.sort((a, b) => a.ts - b.ts);
-  return { played, fixtures, url };
+
+  // A volunteer-maintained mirror can simply stop: Serie A 2024-25 is missing
+  // its entire final matchday. Ratings quietly fitted on an incomplete season,
+  // and predictions that stay "pending" forever, are the symptoms — so count
+  // the holes and hand them to the caller rather than assuming completeness.
+  const cutoff = Date.now() - LAG_DAYS * 86_400_000;
+  const missing = fixtures.filter((f) => f.ts < cutoff);
+  const coverage: SeasonCoverage = {
+    total: played.length + fixtures.length,
+    played: played.length,
+    upcoming: fixtures.length - missing.length,
+    missing_results: missing.length,
+    ...(missing.length ? { missing_examples: missing.slice(0, 5).map((f) => `${f.date} ${f.home} v ${f.away}`) } : {}),
+    ...(played.length ? { last_result_date: played[played.length - 1].date } : {}),
+  };
+  return { played, fixtures, url, coverage };
 }

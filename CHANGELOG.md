@@ -26,7 +26,13 @@ Every backtest result ships with its caveats (assumed fills, sample size, the ri
 
 **Second data source, so the loop survives a blocked or failing archive.** `trading_predict_fixtures` and `trading_score_predictions` take a `source`: `footballdata` (football-data.co.uk — results, odds, about a week of fixtures), `openfootball` (a keyless GitHub-hosted mirror with the full season calendar but no odds), or `auto`, which prefers the first and falls back to the second. The fallback is always reported, along with what it costs: no odds means no market benchmark, no edge and no picks — the probabilities and their scoring still work. Fixtures dated before today with no result yet are skipped rather than "predicted", since both sources lag by a few days.
 
-**`npm run track`** (`scripts/season-tracker.mjs`) runs the loop from a shell with no MCP client: `predict` logs a round to `predictions/<LEAGUE>-<SEASON>.json` (append-only — a forecast you can edit after the result is not a forecast), `score` grades what has been played, and `hindcast` re-predicts every match already played this season using only what was known before each one.
+**Fixed: every 0-0 was being dropped from the openfootball mirror.** That source writes most matches as `{"ft":[h,a],"ht":[…]}` but some as a bare `[h,a]` — and in Serie A 2025-26 the bare form is used for all 36 goalless matches. Reading only `.ft` classified them as "not played", so ratings never saw a goalless game: over-2.5 probabilities came out 4-5 percentage points too high and draws about 1.4 points too low, enough to flip the most likely outcome of a fixture. Both shapes are read now. Found by cross-checking a finished season against an independent mirror, which agreed on goals and on home and away wins but not on draws.
+
+**Data-quality reporting.** A match whose date has passed with no result is a hole in the source, not lag: `trading_predict_fixtures` returns those under `data_quality`, and `trading_score_predictions` distinguishes a prediction still to come from one the source will never settle, and from a name that is not in the source at all.
+
+**`npm run verify:sources`** (`scripts/verify-sources.mjs`) checks the live sources against what the code expects: shapes parse, seasons are complete enough to rate a league on, and a finished season agrees with an independent mirror. FAIL means real upstream drift; SKIP means the host was unreachable, which is an environment fact rather than a defect.
+
+**`npm run track`** (`scripts/season-tracker.mjs`) runs the loop from a shell with no MCP client: `predict` logs a round to `predictions/<LEAGUE>-<SEASON>.json` (append-only — a forecast you can edit after the result is not a forecast), `score` grades what has been played, and `hindcast` re-predicts every match already played this season using only what was known before each one. `predict --supersede "<reason>"` retires earlier predictions on matches still ahead — the old rows stay in the log with the reason, since the point of an append-only log is that nothing quietly changes after the fact.
 
 Totals: **43 providers / 421 tools** (up from 42 / 410). `footballdata_uk_` now shares the CSV loader with the new provider — same tools, same behaviour.
 
@@ -43,7 +49,7 @@ Totals: **43 providers / 421 tools** (up from 42 / 410). `footballdata_uk_` now 
 - **In-flight coalescing.** Concurrent identical requests share one upstream call.
 - **Negative caching** of `404`/`410` for 30s, so a wrong ID is not re-fetched in a loop.
 - **Server instructions** describing `fields` once at connect time rather than on 396 tool schemas.
-- 22 tests covering projection, slimming, capping, retries, coalescing and cache isolation, plus 62 for the trading maths, the archive's odds columns, the backtest engine, the predict/score loop and the source fallback (262 total).
+- 22 tests covering projection, slimming, capping, retries, coalescing and cache isolation, plus 82 for the trading maths, the archive's odds columns, the backtest engine, the predict/score loop, the source fallback, robustness against malformed input, and a full real Serie A season kept verbatim as a fixture — walk-forward forecasting on it is checked for lookahead, calibration and exact regression values (282 total).
 
 ### Changed
 - Tool results are serialized compactly. The previous `JSON.stringify(data, null, 2)` spent 56% of the bytes on indentation no model reads.
