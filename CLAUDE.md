@@ -237,6 +237,7 @@ scripts/season-tracker.mjs   → CLI loop: predict a round, log it, score it (np
 scripts/verify-sources.mjs   → Live check that the upstream sources still parse (npm run verify:sources)
 scripts/tune-model.mjs       → Train/validation search over model parameters (npm run tune)
 scripts/fetch-archive.mjs    → Fill data/football-data from a GitHub mirror with odds (npm run fetch:archive)
+scripts/strategy-sweep.mjs   → Train/validation ROI for every flat strategy, with standard errors (npm run sweep)
 data/football-data/          → Drop football-data.co.uk CSVs here; read before the network (see its README)
 src/tests/fixtures/          → Real season files, kept verbatim, defects included (see fixtures/README.md)
 src/tests/*.test.mjs         → Offline test suite, incl. the trading maths and backtest engine (run: npm test)

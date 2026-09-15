@@ -410,3 +410,65 @@ The gap is smaller here (-3%) than in the Premier League study above (-9%)
 because this dataset carries the market **average** price, while that one used
 the **closing** line. Both are the same finding at different sharpness: the
 model trails the average price by about 3% and the closing line by about 9%.
+
+## Which strategy would have returned the most?
+
+None of them. Every one loses, and the sample is large enough to say so
+without hedging: 19 leagues, 2005-06 to 2026-27, **over a million bets** across
+the sweep. Reproduce with `npm run fetch:archive && npm run sweep`.
+
+Strategies are run on 2005-2019 and again on 2019-2027, a period they were not
+chosen on. ROI is flat-stake, with the standard error of the estimate — without
+it a small number looks like a result when it is the width of the noise.
+
+| Strategy | Market average price | Best available price | Validation odds |
+|---|---|---|---|
+| favourite | -3.61% ±0.50 | **-0.51% ±0.47** | 2.07 |
+| draw | -4.89% ±0.97 | -0.48% ±0.87 | 3.99 |
+| home | -6.17% ±0.64 | -2.21% ±0.64 | 2.74 |
+| over 2.5 | -5.96% ±0.57 | -2.27% ±0.48 | 1.99 |
+| under 2.5 | -6.10% ±0.54 | -2.59% ±0.46 | 2.02 |
+| away | -7.57% ±1.19 | -2.86% ±1.00 | 4.27 |
+| underdog | -8.73% ±1.34 | -3.18% ±1.08 | 5.07 |
+
+*(validation period; ± is one standard error)*
+
+- **Nothing is positive in both periods.** Not one of the 14 combinations.
+- **Nothing is more than two standard errors above zero** in validation either.
+- The best validation number, `draw` at best price (-0.48%), returned -3.56% in
+  training. The best training number, `home` at best price (-0.06%), returned
+  -2.21% in validation. That flip is what data mining looks like from the
+  inside.
+- The most precisely measured is `favourite` at best price: -0.30% training,
+  -0.51% validation, 135,000 bets between them. Tight, consistent, and
+  negative — the residual house edge after shopping, measured.
+
+The model-driven strategy on the same data: `value_model` at best price with a
+10% edge threshold returned **+0.23% over 7,071 bets**. At those odds the
+standard error is about 2.4 points, so that is zero with a decoration. Loosen
+the threshold to 5% and it is -0.61%; tighten it to 20% and it is -1.83%. At
+the market average price it is -6.47%.
+
+### The one thing that was worth real money
+
+Look down the two price columns rather than across the strategies. Taking the
+**best available price instead of the market average** is worth about **four to
+five percentage points of ROI on every strategy** — more than the entire spread
+between the best and worst strategy in either column.
+
+| | Average price | Best price | Gained |
+|---|---|---|---|
+| favourite | -3.61% | -0.51% | **+3.1** |
+| home | -6.17% | -2.21% | **+4.0** |
+| over 2.5 | -5.96% | -2.27% | **+3.7** |
+| underdog | -8.73% | -3.18% | **+5.6** |
+
+This is the practical finding of the whole exercise: **where you place the bet
+matters more than what you bet on.** Line shopping does not turn a loser into a
+winner — favourite at best price is still -0.5% — but it recovers most of the
+bookmaker's margin, and it requires no model at all.
+
+The caveat that keeps it honest: `max` is the best price *any* book offered,
+recorded after the fact. Holding accounts at every one of them, getting on
+before the price moves, and not being limited when you keep taking the top of
+the market are the reasons this is an upper bound rather than a plan.
