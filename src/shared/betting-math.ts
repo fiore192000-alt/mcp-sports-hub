@@ -453,6 +453,11 @@ export interface TeamRating {
   defence: number;
   goals_for_pg: number;
   goals_against_pg: number;
+  /** Venue-specific strengths, present only when the fit was asked for them. */
+  attack_home?: number;
+  attack_away?: number;
+  defence_home?: number;
+  defence_away?: number;
 }
 
 export interface RatingsFit {
@@ -472,6 +477,12 @@ export interface FitOptions {
   prior_matches?: number;
   /** Reference time for the decay; defaults to the latest match in the sample. */
   as_of?: number;
+  /**
+   * Also rate each team separately at home and away, pooled toward its own
+   * overall rating. Some sides really are different teams away from home; most
+   * are not, which is why the venue ratings are pooled rather than free.
+   */
+  home_away_split?: boolean;
 }
 
 /**
@@ -505,11 +516,13 @@ export function fitRatings(matches: RatedMatch[], opts: FitOptions = {}): Rating
   const homeAvg = homeGoals / wSum;
   const awayAvg = awayGoals / wSum;
 
-  interface Acc { w: number; n: number; gf: number; ga: number; expGf: number; expGa: number }
+  interface Venue { w: number; gf: number; ga: number; expGf: number; expGa: number }
+  interface Acc { w: number; n: number; gf: number; ga: number; expGf: number; expGa: number; home: Venue; away: Venue }
+  const blankVenue = (): Venue => ({ w: 0, gf: 0, ga: 0, expGf: 0, expGa: 0 });
   const acc = new Map<string, Acc>();
   const touch = (team: string): Acc => {
     let a = acc.get(team);
-    if (!a) { a = { w: 0, n: 0, gf: 0, ga: 0, expGf: 0, expGa: 0 }; acc.set(team, a); }
+    if (!a) { a = { w: 0, n: 0, gf: 0, ga: 0, expGf: 0, expGa: 0, home: blankVenue(), away: blankVenue() }; acc.set(team, a); }
     return a;
   };
 
@@ -518,8 +531,12 @@ export function fitRatings(matches: RatedMatch[], opts: FitOptions = {}): Rating
     const h = touch(m.home), a = touch(m.away);
     h.w += w; h.n += 1; h.gf += w * m.homeGoals; h.ga += w * m.awayGoals;
     h.expGf += w * homeAvg; h.expGa += w * awayAvg;
+    h.home.w += w; h.home.gf += w * m.homeGoals; h.home.ga += w * m.awayGoals;
+    h.home.expGf += w * homeAvg; h.home.expGa += w * awayAvg;
     a.w += w; a.n += 1; a.gf += w * m.awayGoals; a.ga += w * m.homeGoals;
     a.expGf += w * awayAvg; a.expGa += w * homeAvg;
+    a.away.w += w; a.away.gf += w * m.awayGoals; a.away.ga += w * m.homeGoals;
+    a.away.expGf += w * awayAvg; a.away.expGa += w * homeAvg;
   }
 
   const teams = new Map<string, TeamRating>();
@@ -527,14 +544,30 @@ export function fitRatings(matches: RatedMatch[], opts: FitOptions = {}): Rating
     const rawAttack = t.expGf > 0 ? t.gf / t.expGf : 1;
     const rawDefence = t.expGa > 0 ? t.ga / t.expGa : 1;
     const shrink = (raw: number) => (raw * t.w + prior) / (t.w + prior);
+    const attack = shrink(rawAttack);
+    const defence = shrink(rawDefence);
+    // A venue rating is pooled toward the team's own overall rating, not
+    // toward the league: half a season of home games is thin evidence that a
+    // side is genuinely different at home.
+    const venue = (v: Venue, exp: number, goals: number, overall: number) => {
+      if (!opts.home_away_split) return undefined;
+      const raw = exp > 0 ? goals / exp : overall;
+      return round((raw * v.w + overall * prior) / (v.w + prior), 4);
+    };
     teams.set(team, {
       team,
       matches: t.n,
       weight: round(t.w, 3),
-      attack: round(shrink(rawAttack), 4),
-      defence: round(shrink(rawDefence), 4),
+      attack: round(attack, 4),
+      defence: round(defence, 4),
       goals_for_pg: round(t.n ? t.gf / t.w : 0, 3),
       goals_against_pg: round(t.n ? t.ga / t.w : 0, 3),
+      ...(opts.home_away_split ? {
+        attack_home: venue(t.home, t.home.expGf, t.home.gf, attack),
+        defence_home: venue(t.home, t.home.expGa, t.home.ga, defence),
+        attack_away: venue(t.away, t.away.expGf, t.away.gf, attack),
+        defence_away: venue(t.away, t.away.expGa, t.away.ga, defence),
+      } : {}),
     });
   }
 
@@ -549,13 +582,100 @@ export function fitRatings(matches: RatedMatch[], opts: FitOptions = {}): Rating
   };
 }
 
+export interface ExpectedGoalsOptions {
+  /**
+   * What to assume about a team with no history at all — a side promoted into
+   * this league. Without it the fixture is simply unrateable, which is honest
+   * but loses every match a promoted team plays in its first season.
+   */
+  fallback?: { attack: number; defence: number };
+}
+
 /** Expected goals for a fixture under a fitted ratings set. */
-export function expectedGoals(fit: RatingsFit, home: string, away: string): { home: number; away: number } | null {
-  const h = fit.teams.get(home);
-  const a = fit.teams.get(away);
-  if (!h || !a) return null;
+export function expectedGoals(
+  fit: RatingsFit,
+  home: string,
+  away: string,
+  opts: ExpectedGoalsOptions = {},
+): { home: number; away: number } | null {
+  const unrated: TeamRating | undefined = opts.fallback
+    ? { team: "", matches: 0, weight: 0, goals_for_pg: 0, goals_against_pg: 0, ...opts.fallback }
+    : undefined;
+  const h = fit.teams.get(home) ?? unrated;
+  const a = fit.teams.get(away) ?? unrated;
+  if (!h || !a || fit.home_goal_avg <= 0 || fit.away_goal_avg <= 0) return null;
   return {
-    home: h.attack * a.defence * fit.home_goal_avg,
-    away: a.attack * h.defence * fit.away_goal_avg,
+    home: (h.attack_home ?? h.attack) * (a.defence_away ?? a.defence) * fit.home_goal_avg,
+    away: (a.attack_away ?? a.attack) * (h.defence_home ?? h.defence) * fit.away_goal_avg,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Forecast scoring
+// ---------------------------------------------------------------------------
+
+/** Long-run 1X2 base rates — the "know nothing" forecast every model must beat. */
+export const BASE_RATES: [number, number, number] = [0.44, 0.26, 0.30];
+
+export type OutcomeIndex = 0 | 1 | 2;
+
+/**
+ * Ranked probability score for an ordered three-way market. Lower is better,
+ * 0 is perfect. Unlike hit rate it punishes being confidently wrong, and
+ * unlike Brier it knows home/draw/away are ordered, so calling an away win
+ * when it finished a draw costs less than calling a home win.
+ */
+export function rankedProbabilityScore(p: [number, number, number], actual: OutcomeIndex): number {
+  let cumP = 0, cumActual = 0, total = 0;
+  for (let i = 0; i < 2; i++) {
+    cumP += p[i];
+    cumActual += actual === i ? 1 : 0;
+    total += (cumP - cumActual) ** 2;
+  }
+  return total / 2;
+}
+
+/** Multi-category Brier score: the squared error summed over all three outcomes. */
+export function brierScore(p: [number, number, number], actual: OutcomeIndex): number {
+  return p.reduce((acc, prob, i) => acc + (prob - (actual === i ? 1 : 0)) ** 2, 0);
+}
+
+/** Negative log likelihood of the outcome that happened, clamped off zero. */
+export function logLoss(p: [number, number, number], actual: OutcomeIndex): number {
+  return -Math.log(Math.min(1 - 1e-6, Math.max(1e-6, p[actual])));
+}
+
+export interface ForecastScores {
+  n: number;
+  rps: number;
+  brier: number;
+  log_loss: number;
+  hits: number;
+  hit_rate: number;
+}
+
+/**
+ * Score a batch of forecasts against what happened. Used by the scoring tool
+ * and by the tuning harness, so a parameter search and a reported result can
+ * never drift apart.
+ */
+export function scoreForecasts(
+  forecasts: Array<{ p: [number, number, number]; actual: OutcomeIndex }>,
+): ForecastScores {
+  let rps = 0, brier = 0, ll = 0, hits = 0;
+  for (const { p, actual } of forecasts) {
+    rps += rankedProbabilityScore(p, actual);
+    brier += brierScore(p, actual);
+    ll += logLoss(p, actual);
+    if ((p.indexOf(Math.max(...p)) as OutcomeIndex) === actual) hits++;
+  }
+  const n = forecasts.length || 1;
+  return {
+    n: forecasts.length,
+    rps: rps / n,
+    brier: brier / n,
+    log_loss: ll / n,
+    hits,
+    hit_rate: hits / n,
   };
 }

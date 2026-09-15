@@ -97,3 +97,192 @@ better than nothing", not as "the model beats the market".
 A model can be beautifully calibrated and still lose money against every
 bookmaker in Europe. Those are different questions, and only one of them is
 answered here.
+
+## Trying to make it better
+
+Every idea below was chosen on training seasons (2016-17 to 2020-21) and
+scored on validation seasons the search never saw (2021-22 to 2025-26), over
+the top three leagues. Reproduce with `npm run tune -- --compare`.
+
+| Variant | Train RPS | Validation RPS | vs baseline |
+|---|---|---|---|
+| **baseline** (240d half-life, prior 4, rho -0.1) | 0.19550 | **0.19992** | — |
+| no recency decay | 0.19544 | 0.20047 | -0.28% |
+| fast decay (120d) | 0.19685 | 0.20079 | -0.44% |
+| slow decay (540d) | 0.19527 | 0.20001 | -0.05% |
+| weak shrinkage (2) | 0.19540 | 0.19997 | -0.03% |
+| strong shrinkage (16) | 0.19915 | 0.20255 | -1.31% |
+| no Dixon-Coles (rho 0) | 0.19547 | 0.20000 | -0.04% |
+| strong Dixon-Coles (rho -0.15) | 0.19562 | 0.19997 | -0.03% |
+| blend 5% toward base rates | 0.19581 | 0.20007 | -0.08% |
+| blend 20% toward base rates | 0.19763 | 0.20138 | -0.73% |
+| separate home/away ratings | 0.19767 | 0.20213 | -1.11% |
+
+**Nothing helped.** A 96-cell grid over half-life, shrinkage and rho found a
+combination 0.2% better on training that was 0.15% *worse* on validation —
+the signature of fitting noise. The hand-picked defaults are already at the
+plateau of what goals-only ratings can do, and several plausible ideas (venue
+splits, blending, heavier shrinkage) make it clearly worse.
+
+This is the useful negative result: **the ceiling here is the input, not the
+fitting.** More parameter search on the same data will not move it.
+
+### The one thing that did help, and it is not accuracy
+
+Giving a newly promoted side an assumed rating (0.85 attack, 1.15 defence)
+instead of refusing to predict it:
+
+| | Matches | RPS |
+|---|---|---|
+| Fixtures both variants cover | 5,508 | 0.19992 either way — **identical** |
+| Fixtures the baseline refuses | 172 | **0.19135** (base rates: 0.2298) |
+
+So it changes nothing for rated teams and predicts the previously-unpredictable
+ones better than the model's own average — a coverage gain, not an accuracy
+gain, and worth having for exactly that reason. It is on by default, each
+affected fixture names the assumption in `assumed_prior_for`, and
+`rate_promoted: false` turns it off. It applies to at most one side: with both
+teams unknown the forecast would be the prior playing itself, so those are
+still declined.
+
+## What would actually move the number
+
+In the order the evidence supports:
+
+1. **Bookmaker odds.** Blending a model with the market is the most reliable
+   accuracy gain in the forecasting literature, and without prices there is no
+   way to know whether 0.20 is good. Drop CSVs into `data/football-data/`
+   (see the README there) or allow `www.football-data.co.uk` through the
+   network.
+2. **Shot quality (xG).** Goals are a noisy sample of chances; ratings built on
+   expected goals converge faster and rate a team that lost 0-1 having had 18
+   shots correctly. This is the biggest *modelling* upgrade available, and it
+   needs a source this repo cannot currently reach.
+3. **Team news.** Lineups, injuries and suspensions published an hour before
+   kick-off are most of what moves a market between opening and closing.
+
+## Trying to make it better
+
+Every idea below was chosen on training seasons (2016-17 to 2020-21) and
+scored on validation seasons the search never saw (2021-22 to 2025-26), over
+the top three leagues. Reproduce with `npm run tune -- --compare`.
+
+| Variant | Train RPS | Validation RPS | vs baseline |
+|---|---|---|---|
+| **baseline** (240d half-life, prior 4, rho -0.1) | 0.19550 | **0.19992** | — |
+| no recency decay | 0.19544 | 0.20047 | -0.28% |
+| fast decay (120d) | 0.19685 | 0.20079 | -0.44% |
+| slow decay (540d) | 0.19527 | 0.20001 | -0.05% |
+| weak shrinkage (2) | 0.19540 | 0.19997 | -0.03% |
+| strong shrinkage (16) | 0.19915 | 0.20255 | -1.31% |
+| no Dixon-Coles (rho 0) | 0.19547 | 0.20000 | -0.04% |
+| strong Dixon-Coles (rho -0.15) | 0.19562 | 0.19997 | -0.03% |
+| blend 5% toward base rates | 0.19581 | 0.20007 | -0.08% |
+| blend 20% toward base rates | 0.19763 | 0.20138 | -0.73% |
+| separate home/away ratings | 0.19767 | 0.20213 | -1.11% |
+
+**Nothing helped.** A 96-cell grid over half-life, shrinkage and rho found a
+combination 0.2% better on training that was 0.15% *worse* on validation —
+the signature of fitting noise. The hand-picked defaults are already at the
+plateau of what goals-only ratings can do, and several plausible ideas (venue
+splits, blending, heavier shrinkage) make it clearly worse.
+
+This is the useful negative result: **the ceiling here is the input, not the
+fitting.** More parameter search on the same data will not move it.
+
+### The one thing that did help, and it is not accuracy
+
+Giving a newly promoted side an assumed rating (0.85 attack, 1.15 defence)
+instead of refusing to predict it:
+
+| | Matches | RPS |
+|---|---|---|
+| Fixtures both variants cover | 5,508 | 0.19992 either way — **identical** |
+| Fixtures the baseline refuses | 172 | **0.19135** (base rates: 0.2298) |
+
+So it changes nothing for rated teams and predicts the previously-unpredictable
+ones better than the model's own average — a coverage gain, not an accuracy
+gain, and worth having for exactly that reason. It is on by default, each
+affected fixture names the assumption in `assumed_prior_for`, and
+`rate_promoted: false` turns it off. It applies to at most one side: with both
+teams unknown the forecast would be the prior playing itself, so those are
+still declined.
+
+## What would actually move the number
+
+In the order the evidence supports:
+
+1. **Bookmaker odds.** Blending a model with the market is the most reliable
+   accuracy gain in the forecasting literature, and without prices there is no
+   way to know whether 0.20 is good. Drop CSVs into `data/football-data/`
+   (see the README there) or allow `www.football-data.co.uk` through the
+   network.
+2. **Shot quality (xG).** Goals are a noisy sample of chances; ratings built on
+   expected goals converge faster and rate a team that lost 0-1 having had 18
+   shots correctly. This is the biggest *modelling* upgrade available, and it
+   needs a source this repo cannot currently reach.
+3. **Team news.** Lineups, injuries and suspensions published an hour before
+   kick-off are most of what moves a market between opening and closing.
+
+## Trying to make it better
+
+Every idea below was chosen on training seasons (2016-17 to 2020-21) and
+scored on validation seasons the search never saw (2021-22 to 2025-26), over
+the top three leagues. Reproduce with `npm run tune -- --compare`.
+
+| Variant | Train RPS | Validation RPS | vs baseline |
+|---|---|---|---|
+| **baseline** (240d half-life, prior 4, rho -0.1) | 0.19550 | **0.19992** | — |
+| no recency decay | 0.19544 | 0.20047 | -0.28% |
+| fast decay (120d) | 0.19685 | 0.20079 | -0.44% |
+| slow decay (540d) | 0.19527 | 0.20001 | -0.05% |
+| weak shrinkage (2) | 0.19540 | 0.19997 | -0.03% |
+| strong shrinkage (16) | 0.19915 | 0.20255 | -1.31% |
+| no Dixon-Coles (rho 0) | 0.19547 | 0.20000 | -0.04% |
+| strong Dixon-Coles (rho -0.15) | 0.19562 | 0.19997 | -0.03% |
+| blend 5% toward base rates | 0.19581 | 0.20007 | -0.08% |
+| blend 20% toward base rates | 0.19763 | 0.20138 | -0.73% |
+| separate home/away ratings | 0.19767 | 0.20213 | -1.11% |
+
+**Nothing helped.** A 96-cell grid over half-life, shrinkage and rho found a
+combination 0.2% better on training that was 0.15% *worse* on validation —
+the signature of fitting noise. The hand-picked defaults are already at the
+plateau of what goals-only ratings can do, and several plausible ideas (venue
+splits, blending, heavier shrinkage) make it clearly worse.
+
+This is the useful negative result: **the ceiling here is the input, not the
+fitting.** More parameter search on the same data will not move it.
+
+### The one thing that did help, and it is not accuracy
+
+Giving a newly promoted side an assumed rating (0.85 attack, 1.15 defence)
+instead of refusing to predict it:
+
+| | Matches | RPS |
+|---|---|---|
+| Fixtures both variants cover | 5,508 | 0.19992 either way — **identical** |
+| Fixtures the baseline refuses | 172 | **0.19135** (base rates: 0.2298) |
+
+So it changes nothing for rated teams and predicts the previously-unpredictable
+ones better than the model's own average — a coverage gain, not an accuracy
+gain, and worth having for exactly that reason. It is on by default, each
+affected fixture names the assumption in `assumed_prior_for`, and
+`rate_promoted: false` turns it off. It applies to at most one side: with both
+teams unknown the forecast would be the prior playing itself, so those are
+still declined.
+
+## What would actually move the number
+
+In the order the evidence supports:
+
+1. **Bookmaker odds.** Blending a model with the market is the most reliable
+   accuracy gain in the forecasting literature, and without prices there is no
+   way to know whether 0.20 is good. Drop CSVs into `data/football-data/`
+   (see the README there) or allow `www.football-data.co.uk` through the
+   network.
+2. **Shot quality (xG).** Goals are a noisy sample of chances; ratings built on
+   expected goals converge faster and rate a team that lost 0-1 having had 18
+   shots correctly. This is the biggest *modelling* upgrade available, and it
+   needs a source this repo cannot currently reach.
+3. **Team news.** Lineups, injuries and suspensions published an hour before
+   kick-off are most of what moves a market between opening and closing.

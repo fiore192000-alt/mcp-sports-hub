@@ -9,6 +9,8 @@
  * Max/Avg after, and separate closing-odds columns (*C*) only from 2019/20.
  */
 
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { fetchText } from "./http.js";
 
 export const FD_BASE = "https://www.football-data.co.uk";
@@ -58,8 +60,38 @@ export function parseCsv(text: string): Array<Record<string, string>> {
 /** Upcoming fixtures across every league, with opening prices attached. */
 export const FD_FIXTURES_PATH = "/fixtures.csv";
 
-/** Fetch and parse one league-season CSV. Historical data — cached an hour. */
+/**
+ * Where to look for football-data.co.uk CSVs on disk before going to the
+ * network. Same layout the site itself uses, so a file downloaded in a browser
+ * can be dropped in unchanged:
+ *
+ *   <dir>/<season>/<LEAGUE>.csv   e.g. data/football-data/2627/I1.csv
+ *   <dir>/fixtures.csv            the upcoming-fixtures file
+ *
+ * This exists because the odds are the part of the pipeline that cannot be
+ * replaced by the keyless mirrors, and the archive is one host that a network
+ * policy, an outage or a rate limit can take away. A local copy is the one
+ * source nothing can block.
+ */
+export const FD_DATA_DIR = process.env.SPORTS_HUB_DATA_DIR ?? "data/football-data";
+
+/** Read a local CSV if it is there. Anything unreadable falls through to the network. */
+async function readLocal(...segments: string[]): Promise<string | undefined> {
+  try {
+    const text = await readFile(resolve(join(FD_DATA_DIR, ...segments)), "utf8");
+    return text.trim() ? text : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Fetch and parse one league-season CSV: local copy first, then the archive.
+ * Historical data — the network path is cached an hour.
+ */
 export async function fetchLeagueSeason(league: string, season: string): Promise<Array<Record<string, string>>> {
+  const local = await readLocal(season, `${league.toUpperCase()}.csv`);
+  if (local) return parseCsv(local);
   const csv = await fetchText(
     `${FD_BASE}/mmz4281/${encodeURIComponent(season)}/${encodeURIComponent(league)}.csv`,
     { cacheTtl: 3600 },
@@ -73,6 +105,8 @@ export async function fetchLeagueSeason(league: string, season: string): Promise
  * move, and this is the one football-data file that is not historical.
  */
 export async function fetchFixtures(): Promise<Array<Record<string, string>>> {
+  const local = await readLocal("fixtures.csv");
+  if (local) return parseCsv(local);
   return parseCsv(await fetchText(`${FD_BASE}${FD_FIXTURES_PATH}`, { cacheTtl: 900 }));
 }
 

@@ -549,6 +549,7 @@ describe("predicting and scoring (stubbed CSVs)", () => {
     `E0,${fdDate(3)},17:30,MidA,MidB,2.50,3.40,3.00,1.90,1.90`,
     `I1,${fdDate(2)},20:45,Roma,Lazio,2.20,3.30,3.40,1.85,1.95`,
     `E0,${fdDate(25)},15:00,Strong,MidA,2.50,3.40,3.00,1.90,1.90`,
+    `E0,${fdDate(4)},15:00,Strong,Newcomer FC,1.40,4.50,7.00,1.80,2.00`,
     "",
   ].join("\n");
 
@@ -570,7 +571,7 @@ describe("predicting and scoring (stubbed CSVs)", () => {
 
   it("prices the upcoming fixtures and keeps the far-off ones out", async () => {
     const data = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10 });
-    assert.equal(data.predictions.length, 2, "the fixture 25 days out is outside the horizon");
+    assert.equal(data.predictions.length, 3, "the fixture 25 days out is outside the horizon");
     const strong = data.predictions.find((p) => p.home === "Strong");
     assert.equal(strong.most_likely, "home");
     assert.ok(strong.prob_home > strong.prob_away, "the dominant side should be favoured");
@@ -581,11 +582,29 @@ describe("predicting and scoring (stubbed CSVs)", () => {
     assert.ok(strong.pick.stake > 0);
   });
 
-  it("filters by league and reports teams it cannot rate", async () => {
+  it("declines a fixture where neither side has history", async () => {
     const data = await call("trading_predict_fixtures", { leagues: "I1", season: "2627", days_ahead: 10 });
-    assert.equal(data.predictions.length, 0);
+    assert.equal(data.predictions.length, 0, "the promoted-team prior cannot stand in for both sides at once");
     assert.equal(data.unrated.length, 1, "Roma and Lazio have no history in the stubbed archive");
-    assert.match(data.unrated[0].reason, /no history|no rated matches/);
+    assert.match(data.unrated[0].reason, /prior playing itself/);
+  });
+
+  it("prices a fixture with one unknown side, and says which side it assumed", async () => {
+    const data = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10, limit: 40 });
+    const promoted = data.predictions.find((p) => p.away === "Newcomer FC");
+    assert.ok(promoted, "a fixture with one unrated side should still be priced");
+    assert.deepEqual(promoted.assumed_prior_for, ["Newcomer FC"]);
+    assert.deepEqual(promoted.assumed_prior, { attack: 0.85, defence: 1.15 });
+    assert.equal(promoted.most_likely, "home", "an unknown side away to a dominant home team");
+    assert.ok(data.promoted_prior_note, "and the summary says an assumption was used");
+  });
+
+  it("reports the unknown side instead of assuming, when asked to", async () => {
+    const data = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10, limit: 40, rate_promoted: false });
+    assert.ok(!data.predictions.some((p) => p.away === "Newcomer FC"));
+    const row = data.unrated.find((u) => u.match.includes("Newcomer FC"));
+    assert.ok(row, "it comes back as unrated");
+    assert.match(row.reason, /rate_promoted is off/);
   });
 
   it("says so plainly when nothing is in the window", async () => {
@@ -893,5 +912,56 @@ describe("robustness against malformed input", () => {
     const data = JSON.parse(r.text.replace(/^Error: /, ""));
     const text = JSON.stringify(data);
     assert.match(text, /no mapping for league|no data/i);
+  });
+});
+
+const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+const { tmpdir } = await import("node:os");
+const { join: joinPath } = await import("node:path");
+
+describe("local CSV drop-in", () => {
+  let dir, realFetch, fetched;
+  const CSV = [
+    "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,AvgH,AvgD,AvgA,AvgCH,AvgCD,AvgCA",
+    "I1,17/08/26,Inter,Genoa,3,0,H,1.40,4.80,8.00,1.35,5.00,9.00",
+    "I1,18/08/26,Roma,Lazio,1,1,D,2.30,3.30,3.20,2.25,3.35,3.30",
+    "",
+  ].join("\n");
+
+  before(async () => {
+    dir = await mkdtemp(joinPath(tmpdir(), "sportshub-"));
+    await mkdir(joinPath(dir, "2627"), { recursive: true });
+    await writeFile(joinPath(dir, "2627", "I1.csv"), CSV);
+    process.env.SPORTS_HUB_DATA_DIR = dir;
+    realFetch = globalThis.fetch;
+    fetched = [];
+    globalThis.fetch = async (url) => {
+      fetched.push(String(url));
+      throw new Error("HTTP 403 Forbidden: Host not in allowlist");
+    };
+  });
+  after(() => {
+    globalThis.fetch = realFetch;
+    delete process.env.SPORTS_HUB_DATA_DIR;
+  });
+
+  it("reads a dropped-in season instead of the network, odds and all", async () => {
+    // The module reads the env var at import time, so load a fresh copy.
+    const fresh = await import(`${dist("shared/football-csv.js")}?local-test`);
+    const rows = await fresh.fetchLeagueSeason("I1", "2627");
+    assert.equal(rows.length, 2);
+    assert.equal(fetched.length, 0, "a local copy means no request at all");
+    const matches = fresh.toMatches(rows, "I1", "2627", "avg");
+    assert.equal(matches.length, 2);
+    assert.equal(matches[0].prices.open.H.odds, 1.40, "the odds the mirrors do not have");
+    assert.equal(matches[0].prices.close.H.odds, 1.35);
+  });
+
+  it("falls through to the network when the file is not there", async () => {
+    const fresh = await import(`${dist("shared/football-csv.js")}?local-test`);
+    // A league-season no other test touches: the HTTP cache is process-wide
+    // and keyed by URL, so a combination used elsewhere would resolve from it.
+    await assert.rejects(() => fresh.fetchLeagueSeason("D1", "9998"), /403/);
+    assert.ok(fetched.some((u) => u.includes("football-data.co.uk")), "it did try the archive");
   });
 });
