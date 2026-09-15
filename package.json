@@ -21,7 +21,7 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "pretest": "npm run build",
-    "test": "node --test src/tests/smoke.test.mjs src/tests/annotations.test.mjs src/tests/mcp-features.test.mjs src/tests/pipeline.test.mjs src/tests/http-resilience.test.mjs src/tests/trading.test.mjs src/tests/real-data.test.mjs",
+    "test": "node --test src/tests/smoke.test.mjs src/tests/annotations.test.mjs src/tests/mcp-features.test.mjs src/tests/pipeline.test.mjs src/tests/http-resilience.test.mjs src/tests/trading.test.mjs src/tests/real-data.test.mjs src/tests/polymarket.test.mjs",
     "test:e2e": "npm run build && node src/tests/e2e.test.mjs",
     "track": "node scripts/season-tracker.mjs",
     "verify:sources": "npm run build && node scripts/verify-sources.mjs",

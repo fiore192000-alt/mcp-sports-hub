@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete list of all **423 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
+Complete list of all **428 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
 
 ---
 
@@ -855,3 +855,17 @@ Local computation — no API key. `trading_backtest` and `trading_team_ratings` 
 | `trading_score_predictions` | Score predictions you made earlier against what actually happened: hit rate, ranked probability score and log loss, measured against the bookmakers' own prices as the benchmark, plus calibration and the P&L and closing-line value of any picks. Feed it the `predictions` array from trading_predict_fixtures. | **predictions**, season?, commission_pct?, sample? |
 | `trading_price_market` | Turn fair probabilities into the odds a bookmaker would display, by adding a margin rather than removing one. The inverse of trading_devig_odds. Use it to see what your model's probabilities look like as posted prices, or to check how far a real book's prices sit from your own. | **probabilities**, names?, margin_pct?, method? |
 | `trading_edge_requirements` | The conditions a bet has to meet to make money, as arithmetic: the hit rate that breaks even, the hit rate your claimed edge implies, how many bets before that edge is distinguishable from luck, the Kelly stake, the risk of ruin at different staking speeds, and the losing run to expect anyway. Use it before trusting a record, and before sizing anything. | **odds**, edge_pct?, commission_pct?, bets_so_far? |
+
+---
+
+## Polymarket (`polymarket_`) — 5 tools
+
+Prediction-market prices, for comparison against a bookmaker. Written from the public API shape; run `npm run verify:sources` before trusting the field mapping.
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `polymarket_get_markets` | List Polymarket prediction markets with their current prices, implied odds and liquidity. Prices are probabilities (0-1) set by traders, not by a bookmaker — the implied odds let you compare them directly against a sportsbook. | search?, limit?, closed?, order? |
+| `polymarket_get_market` | Get one Polymarket market by its slug or id, with outcome prices, implied odds, liquidity and the token ids needed to read its order book. | slug?, id? |
+| `polymarket_get_order_book` | Get the live order book for one outcome: the bids and asks with the size behind each. This is what a bookmaker never shows you — how much can actually be traded, and at what price it starts to move. | **token_id**, depth? |
+| `polymarket_compare_to_book` | Put a Polymarket price next to a bookmaker's on the same outcome: which venue is offering more, by how much, and whether the two disagree enough to back one side at each. The arbitrage check accounts for the exchange fee. | **polymarket_probability**, **bookmaker_odds**, bookmaker_odds_against?, fee_pct? |
+| `polymarket_explain` | What a prediction market changes about betting economics compared with a bookmaker, and what it does not. Read this before assuming a move to Polymarket carries an edge across. | _(none)_ |

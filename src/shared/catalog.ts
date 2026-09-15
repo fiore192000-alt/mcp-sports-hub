@@ -40,6 +40,7 @@ export const PROVIDER_CATALOG: ProviderInfo[] = [
   { key: "sleeper", prefix: "sleeper_", name: "Sleeper", coverage: "NFL fantasy: players, injuries, trending, leagues", env: null },
   { key: "euroleague", prefix: "euroleague_", name: "EuroLeague Basketball", coverage: "EuroLeague + EuroCup games, clubs, boxscores", env: null },
   { key: "footballdatauk", prefix: "footballdata_uk_", name: "Football-Data.co.uk", coverage: "Historical football results + bookmaker odds", env: null },
+  { key: "polymarket", prefix: "polymarket_", name: "Polymarket", coverage: "Prediction-market prices and order books — a second venue to price against", env: null },
   { key: "trading", prefix: "trading_", name: "Trading Toolkit (local)", coverage: "Football betting maths: de-vig, EV/Kelly, arbitrage, hedging, Poisson model, historical backtest", env: null },
 
   // API key required
@@ -74,10 +75,10 @@ export const PRESETS: Record<string, string[]> = {
   "f1":         ["f1", "openf1"],
   "motorsport": ["f1", "openf1", "motogp", "formulae", "nascar"],
   "esports":    ["pandascore", "opendota"],
-  "odds":       ["odds", "oddsio", "sgo", "lumify", "trading"],
-  "trading":    ["trading", "footballdatauk", "odds", "oddsio", "sgo", "lumify", "apifootball", "footballdata"],
+  "odds":       ["odds", "oddsio", "sgo", "lumify", "trading", "polymarket"],
+  "trading":    ["trading", "polymarket", "footballdatauk", "odds", "oddsio", "sgo", "lumify", "apifootball", "footballdata"],
   "cricket":    ["cricket", "entitycricket"],
   "golf":       ["livegolf", "golfcourse"],
-  "free":       ["espn", "nhl", "mlb", "f1", "openf1", "openliga", "sportsdb", "ncaa", "sportsrc", "lichess", "chesscom", "squiggle", "motogp", "formulae", "nascar", "opendota", "sleeper", "euroleague", "footballdatauk", "trading"],
+  "free":       ["espn", "nhl", "mlb", "f1", "openf1", "openliga", "sportsdb", "ncaa", "sportsrc", "lichess", "chesscom", "squiggle", "motogp", "formulae", "nascar", "opendota", "sleeper", "euroleague", "footballdatauk", "trading", "polymarket"],
   "chess":      ["lichess", "chesscom"],
 };

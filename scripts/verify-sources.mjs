@@ -130,6 +130,28 @@ await check("season archive + odds columns", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Polymarket — written from the documented API shape, never called from the
+// session that wrote it. This check is the one that would catch that.
+// ---------------------------------------------------------------------------
+
+console.log("\npolymarket");
+
+await check("markets endpoint and field mapping", async () => {
+  const polymarket = await import(dist("providers/polymarket.js"));
+  const tools = new Map();
+  polymarket.register({ tool: (name, description, schema, handler) => tools.set(name, handler) });
+  const result = await tools.get("polymarket_get_markets")({ limit: 5 });
+  if (result.isError) throw new Error(result.content[0].text.replace(/^Error: /, ""));
+  const data = JSON.parse(result.content[0].text);
+  if (!Array.isArray(data.markets)) throw new Error("no markets array — response shape changed");
+  if (data.markets.length === 0) throw new Error("zero markets returned; the filter or the endpoint has moved");
+  const priced = data.markets.filter((m) => m.outcomes.some((o) => o.probability !== undefined));
+  if (priced.length === 0) throw new Error("no market carried a price — outcomePrices is no longer where it was");
+  const withTokens = data.markets.filter((m) => m.outcomes.some((o) => o.token_id));
+  return `${data.markets.length} markets, ${priced.length} priced, ${withTokens.length} with token ids`;
+});
+
+// ---------------------------------------------------------------------------
 // Cross-source agreement — the check neither source can do alone
 // ---------------------------------------------------------------------------
 
