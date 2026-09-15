@@ -1,6 +1,6 @@
 # Sports Hub MCP Server
 
-A unified [Model Context Protocol](https://modelcontextprotocol.io/) server that aggregates **44 sports API providers** into a single service. **428 tools** covering scores, stats, odds, esports, college sports, chess, AFL, and more across 70+ sports.
+A unified [Model Context Protocol](https://modelcontextprotocol.io/) server that aggregates **44 sports API providers** into a single service. **430 tools** covering scores, stats, odds, esports, college sports, chess, AFL, and more across 70+ sports.
 
 Works with any MCP client (Claude, ChatGPT, Gemini, Cursor, Windsurf, Continue, Cline, Zed) on macOS, Linux, and Windows.
 
@@ -32,11 +32,11 @@ Add to Claude Desktop config:
 }
 ```
 
-By default this loads the `free` preset (21 no-key providers, 181 tools) with zero configuration. Set `SPORTS_HUB_PROVIDERS=all` for all 44 providers (428 tools), or a preset like `us-major`, `soccer`, `f1`, `esports`, `odds`, `trading`, `chess`. See [Configuration](Configuration.md) for API key setup.
+By default this loads the `free` preset (21 no-key providers, 183 tools) with zero configuration. Set `SPORTS_HUB_PROVIDERS=all` for all 44 providers (430 tools), or a preset like `us-major`, `soccer`, `f1`, `esports`, `odds`, `trading`, `chess`. See [Configuration](Configuration.md) for API key setup.
 
 ## Providers
 
-### No API key required (21 providers, 181 tools)
+### No API key required (21 providers, 183 tools)
 
 | Prefix | Provider | Coverage | Tools |
 |--------|----------|----------|-------|
@@ -91,10 +91,11 @@ By default this loads the `free` preset (21 no-key providers, 181 tools) with ze
 
 - **[Configuration](Configuration.md)** — Environment variables, API keys, Claude Desktop/Code/Windows/Linux setup
 - **[Data Sources](Data-Sources.md)** — What was searched, what is reachable, and the input that is missing
+- **[Beating the Market](Beating-The-Market.md)** — Whether any of this could beat the best traders on an exchange, and the scoreboard that would prove it
 - **[Thinking Like a Book](Thinking-Like-A-Book.md)** — How bookmakers price, why a 70% hit rate loses money, and the arithmetic of being profitable
 - **[Evaluation](Evaluation.md)** — The forecasting model measured over 19,062 real matches: skill, calibration, and what it still does not prove
 - **[Predicting](Predicting.md)** — Predict a round, score the predictions against the market, week after week
 - **[Providers](Providers.md)** — Detailed reference for all 44 providers with full tool lists
-- **[Tools Reference](Tools-Reference.md)** — All 428 tools with descriptions and parameters
+- **[Tools Reference](Tools-Reference.md)** — All 430 tools with descriptions and parameters
 - **[Rate Limits](Rate-Limits.md)** — Rate limit details and strategies
 - **[Architecture](Architecture.md)** — Project structure, provider pattern, how to contribute

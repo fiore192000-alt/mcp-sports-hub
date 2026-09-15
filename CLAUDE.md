@@ -1,6 +1,6 @@
 # Sports Hub MCP Server
 
-Unified MCP server — 44 providers, 428 tools, one process.
+Unified MCP server — 44 providers, 430 tools, one process.
 Covers: NFL, NBA, EuroLeague, MLB, NHL, Soccer, F1, MotoGP, Formula E, NASCAR, Tennis, Cricket, MMA, Boxing, Golf, Esports, Rugby, Volleyball, Handball, College Sports, Chess, AFL, NFL fantasy, betting/trading maths, and more.
 Also exposes MCP **resources** (provider/preset catalogs at `sportshub://...`) and **prompts** (curated workflows like `whats-on-today`, `compare-odds`, `motorsport-weekend`).
 
@@ -9,7 +9,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 
 ## Provider Reference
 
-### No API key required (21 providers, 181 tools)
+### No API key required (21 providers, 183 tools)
 
 | Prefix | Provider | Coverage | Tools |
 |--------|----------|----------|-------|
@@ -32,7 +32,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 | `sleeper_` | Sleeper | NFL fantasy: player search, injuries, trending, leagues, rosters | 10 |
 | `euroleague_` | EuroLeague Basketball | EuroLeague + EuroCup: games, clubs, boxscores, play-by-play | 6 |
 | `footballdata_uk_` | Football-Data.co.uk | Historical football results + bookmaker odds (CSV, 25+ leagues) | 2 |
-| `polymarket_` | Polymarket | Prediction-market prices, order books, cross-venue price comparison | 5 |
+| `polymarket_` | Polymarket | Prediction-market prices, order books, trade tape, cross-venue price comparison | 7 |
 | `trading_` | Trading toolkit (local) | Betting maths + prediction: de-vig and its inverse, EV/Kelly, arbitrage, hedging, Poisson model, fixture predictions, forecast scoring, backtest, profitability requirements | 13 |
 
 `sportsdb_` defaults to test key "3" (free, watermarked images). Set `THESPORTSDB_API_KEY` for a personal key.
@@ -128,8 +128,8 @@ Providers without published limits (ESPN, NHL, MLB, F1, OpenF1, OpenLigaDB, Golf
 
 ## Provider Filtering
 
-By default, only the `free` preset is loaded (21 providers, 181 tools — no API keys needed).
-Set `SPORTS_HUB_PROVIDERS=all` for all 44 providers (428 tools), but that many tools can overwhelm LLMs.
+By default, only the `free` preset is loaded (21 providers, 183 tools — no API keys needed).
+Set `SPORTS_HUB_PROVIDERS=all` for all 44 providers (430 tools), but that many tools can overwhelm LLMs.
 Use `SPORTS_HUB_PROVIDERS` to control which providers are active.
 
 ### Presets (recommended)
@@ -151,10 +151,10 @@ Use `SPORTS_HUB_PROVIDERS` to control which providers are active.
 ### Usage
 
 ```bash
-# Default — free preset, 21 no-key providers, 181 tools
+# Default — free preset, 21 no-key providers, 183 tools
 node dist/index.js
 
-# All 44 providers (428 tools)
+# All 44 providers (430 tools)
 SPORTS_HUB_PROVIDERS=all node dist/index.js
 
 # Preset — recommended for most users
@@ -189,9 +189,9 @@ In Claude Desktop config:
 ### Why filter?
 
 LLMs work best with fewer, focused tools. Recommendations:
-- **General use**: `free` preset (21 providers, 181 tools)
+- **General use**: `free` preset (21 providers, 183 tools)
 - **Specific sport**: use the sport preset (`f1`, `soccer`, `esports`, etc.)
-- **Full access**: `SPORTS_HUB_PROVIDERS=all` (428 tools — works but slower tool selection)
+- **Full access**: `SPORTS_HUB_PROVIDERS=all` (430 tools — works but slower tool selection)
 
 ## Transport
 

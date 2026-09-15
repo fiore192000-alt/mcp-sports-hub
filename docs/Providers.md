@@ -1,6 +1,6 @@
 # Providers
 
-Sports Hub aggregates **44 independent sports API providers** into one MCP server. Each provider registers its own tools, all prefixed with the provider name to avoid collisions. **428 tools** total.
+Sports Hub aggregates **44 independent sports API providers** into one MCP server. Each provider registers its own tools, all prefixed with the provider name to avoid collisions. **430 tools** total.
 
 
 ---
@@ -739,13 +739,13 @@ Sports Hub aggregates **44 independent sports API providers** into one MCP serve
 | | |
 |---|---|
 | **Prefix** | `polymarket_` |
-| **Tools** | 5 |
+| **Tools** | 7 |
 | **API Base** | `https://gamma-api.polymarket.com` + `https://clob.polymarket.com` |
 | **Auth** | None for reading |
 | **Rate Limits** | Fair use |
 | **Sports** | Whatever the market lists — football coverage concentrates on big matches |
 
-**Tools:** `polymarket_get_markets`, `polymarket_get_market`, `polymarket_get_order_book`, `polymarket_compare_to_book`, `polymarket_explain`
+**Tools:** `polymarket_get_markets`, `polymarket_get_market`, `polymarket_get_order_book`, `polymarket_compare_to_book`, `polymarket_get_trades`, `polymarket_get_quote`, `polymarket_explain`
 
 **Caveats:** Written from the public API shape and never called from the session that wrote it; run `npm run verify:sources` before trusting the field mapping. An exchange removes the bookmaker's margin and the account limits, but liquidity becomes the binding constraint, and the edge measured in [Evaluation](Evaluation.md) does not transfer — it is a disagreement between bookmakers, and this is a single venue.
 

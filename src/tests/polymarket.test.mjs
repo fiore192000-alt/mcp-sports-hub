@@ -118,4 +118,50 @@ describe("polymarket provider", () => {
     assert.match(JSON.stringify(data.what_does_not_change), /does not transfer|disagreement among books/);
     assert.match(data.verification, /could not be called|verify:sources/);
   });
+
+  it("reads the trade tape and weighs it by size", async () => {
+    payload = [
+      { price: "0.60", size: "100", side: "BUY", outcome: "Yes", match_time: "1" },
+      { price: "0.65", size: "900", side: "BUY", outcome: "Yes", match_time: "2" },
+      { price: "0.55", size: "0", side: "SELL", outcome: "Yes", match_time: "3" },
+      { price: "not a price", size: "50" },
+    ];
+    const data = await call("polymarket_get_trades", { market: "0xabc", limit: 10 });
+    assert.match(lastUrl, /clob\.polymarket\.com\/data\/trades/);
+    assert.equal(data.fills, 3, "the unparseable price is dropped, the zero-size fill is kept as a fill");
+    assert.equal(data.volume_usd, 1000);
+    // 100 @ 0.60 + 900 @ 0.65 = 0.645, not the 0.60 a simple average would give.
+    close(data.vwap, 0.645, 1e-6, "volume-weighted, not fill-weighted");
+    assert.equal(data.largest_fills[0].size, 900);
+  });
+
+  it("needs to be told which market to read the tape of", async () => {
+    const result = await tools.get("polymarket_get_trades")({});
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /market condition id or a token id/);
+  });
+
+  it("builds a quote out of three calls and tolerates the ones that fail", async () => {
+    let call_n = 0;
+    const saved = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      call_n++;
+      const u = String(url);
+      // An outcome with no trades yet: midpoint and spread exist, last does not.
+      if (u.includes("/last-trade-price")) throw new Error("404 no trades");
+      const body = u.includes("/midpoint") ? { mid: "0.42" } : { spread: "0.02" };
+      return { ok: true, status: 200, statusText: "OK", headers: new Headers(), json: async () => body, text: async () => JSON.stringify(body) };
+    };
+    try {
+      const data = await call("polymarket_get_quote", { token_id: "t1" });
+      assert.equal(call_n, 3, "all three are attempted");
+      close(data.midpoint, 0.42, 1e-9);
+      close(data.spread, 0.02, 1e-9);
+      close(data.cost_to_cross_pct, 100 * 0.02 / 0.42, 0.01);
+      assert.equal(data.last_trade, undefined, "no last price, and that is not an error");
+      close(data.midpoint_implied_odds, 1 / 0.42, 1e-3);
+    } finally {
+      globalThis.fetch = saved;
+    }
+  });
 });

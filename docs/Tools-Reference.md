@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete list of all **428 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
+Complete list of all **430 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
 
 ---
 
@@ -858,7 +858,7 @@ Local computation — no API key. `trading_backtest` and `trading_team_ratings` 
 
 ---
 
-## Polymarket (`polymarket_`) — 5 tools
+## Polymarket (`polymarket_`) — 7 tools
 
 Prediction-market prices, for comparison against a bookmaker. Written from the public API shape; run `npm run verify:sources` before trusting the field mapping.
 
@@ -869,3 +869,5 @@ Prediction-market prices, for comparison against a bookmaker. Written from the p
 | `polymarket_get_order_book` | Get the live order book for one outcome: the bids and asks with the size behind each. This is what a bookmaker never shows you — how much can actually be traded, and at what price it starts to move. | **token_id**, depth? |
 | `polymarket_compare_to_book` | Put a Polymarket price next to a bookmaker's on the same outcome: which venue is offering more, by how much, and whether the two disagree enough to back one side at each. The arbitrage check accounts for the exchange fee. | **polymarket_probability**, **bookmaker_odds**, bookmaker_odds_against?, fee_pct? |
 | `polymarket_explain` | What a prediction market changes about betting economics compared with a bookmaker, and what it does not. Read this before assuming a move to Polymarket carries an edge across. | _(none)_ |
+| `polymarket_get_trades` | The public trade tape for a market: every fill, its price, its size and which side took it. This is the closest thing to watching what the money is doing — a bookmaker shows you none of it. Use it to see whether a price moved on size or on a single small order. | market?, token_id?, limit? |
+| `polymarket_get_quote` | Midpoint, spread and last traded price for one outcome, in one call. A fuller read than the market snapshot: the midpoint is what the book thinks, the spread is what crossing it costs, and the last trade is what someone actually paid. | **token_id** |

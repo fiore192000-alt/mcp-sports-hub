@@ -4,7 +4,7 @@ import { buildUrl, fetchJson, pathSegment, safe, toolResult } from "../shared/ht
 import { asOdds, asPct, asProb, round } from "../shared/betting-math.js";
 
 // ---------------------------------------------------------------------------
-// Polymarket — 5 tools
+// Polymarket — 7 tools
 // Base: https://gamma-api.polymarket.com (markets) + https://clob.polymarket.com (order book)
 // Auth: none for reading. Trading needs a wallet; nothing here trades.
 //
@@ -224,7 +224,83 @@ export function register(server: McpServer): void {
     }),
   );
 
-  // 5. what this venue is and is not
+  // 5. public trade tape
+  server.tool(
+    "polymarket_get_trades",
+    "The public trade tape for a market: every fill, its price, its size and which side took it. This is the closest thing to watching what the money is doing — a bookmaker shows you none of it. Use it to see whether a price moved on size or on a single small order.",
+    {
+      market: z.string().optional().describe("Condition id of the market (from polymarket_get_markets)"),
+      token_id: z.string().optional().describe("Token id for one outcome, if you want only that side"),
+      limit: z.number().int().min(1).max(500).optional().describe("Max fills to return (default 100)"),
+    },
+    safe(async ({ market, token_id, limit }) => {
+      if (!market && !token_id) throw new Error("Give a market condition id or a token id");
+      const data = await fetchJson(buildUrl(`${CLOB}/data/trades`, {
+        ...(market ? { market } : {}),
+        ...(token_id ? { asset_id: token_id } : {}),
+        limit: limit ?? 100,
+      }), { cacheTtl: 30 }) as Array<Record<string, unknown>> | { data?: Array<Record<string, unknown>> };
+      const trades = Array.isArray(data) ? data : (data?.data ?? []);
+      const parsed = trades.map((t) => ({
+        price: numeric(t.price),
+        implied_odds: toOdds(numeric(t.price)),
+        size: numeric(t.size),
+        side: t.side,
+        outcome: t.outcome,
+        timestamp: t.match_time ?? t.timestamp,
+      })).filter((t) => t.price !== undefined);
+
+      const sized = parsed.filter((t) => (t.size ?? 0) > 0);
+      const volume = sized.reduce((a, t) => a + (t.size as number), 0);
+      const vwap = volume ? sized.reduce((a, t) => a + (t.price as number) * (t.size as number), 0) / volume : undefined;
+      const big = [...sized].sort((a, b) => (b.size as number) - (a.size as number)).slice(0, 5);
+      return toolResult({
+        fills: parsed.length,
+        volume_usd: volume ? round(volume, 2) : undefined,
+        vwap: vwap !== undefined ? round(vwap, 4) : undefined,
+        vwap_implied_odds: toOdds(vwap),
+        largest_fills: big,
+        trades: parsed.slice(0, 50),
+        note: "Volume-weighted price against the current quote tells you whether the market has actually traded where it is quoted. A quote nobody has traded at is an opinion, not a price.",
+      });
+    }),
+  );
+
+  // 6. the quote, properly
+  server.tool(
+    "polymarket_get_quote",
+    "Midpoint, spread and last traded price for one outcome, in one call. A fuller read than the market snapshot: the midpoint is what the book thinks, the spread is what crossing it costs, and the last trade is what someone actually paid.",
+    {
+      token_id: z.string().describe("CLOB token id for the outcome"),
+    },
+    safe(async ({ token_id }) => {
+      const [midpoint, spread, last] = await Promise.all([
+        fetchJson(buildUrl(`${CLOB}/midpoint`, { token_id }), { cacheTtl: 15 }).catch(() => undefined),
+        fetchJson(buildUrl(`${CLOB}/spread`, { token_id }), { cacheTtl: 15 }).catch(() => undefined),
+        fetchJson(buildUrl(`${CLOB}/last-trade-price`, { token_id }), { cacheTtl: 15 }).catch(() => undefined),
+      ]);
+      const pick = (v: unknown, key: string) =>
+        numeric(typeof v === "object" && v !== null ? (v as Record<string, unknown>)[key] : v);
+      const mid = pick(midpoint, "mid");
+      const spr = pick(spread, "spread");
+      const lastPrice = pick(last, "price");
+      return toolResult({
+        token_id,
+        midpoint: mid !== undefined ? round(mid, 4) : undefined,
+        midpoint_implied_odds: toOdds(mid),
+        spread: spr !== undefined ? round(spr, 4) : undefined,
+        cost_to_cross_pct: spr !== undefined && mid ? asPct(spr / mid) : undefined,
+        last_trade: lastPrice !== undefined ? round(lastPrice, 4) : undefined,
+        last_trade_implied_odds: toOdds(lastPrice),
+        ...(mid !== undefined && lastPrice !== undefined
+          ? { last_vs_mid_pct: asPct((lastPrice - mid) / mid) }
+          : {}),
+        note: "Each call is tolerated failing on its own: an outcome with no trades yet has a midpoint and a spread but no last price, and that is information, not an error.",
+      });
+    }),
+  );
+
+  // 7. what this venue is and is not
   server.tool(
     "polymarket_explain",
     "What a prediction market changes about betting economics compared with a bookmaker, and what it does not. Read this before assuming a move to Polymarket carries an edge across.",
