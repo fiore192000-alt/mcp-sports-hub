@@ -71,7 +71,7 @@ const PROVIDERS: Record<string, () => Promise<{ register: (s: McpServer) => void
 // SPORTS_HUB_PROVIDERS controls which providers to load.
 //
 //   Not set / empty    → load "free" preset (19 providers, ~165 tools)
-//   "all"              → load ALL 43 providers (419 tools)
+//   "all"              → load ALL 43 providers (421 tools)
 //   "espn,nhl,mlb"     → load only these 3 (36 tools)
 //   "-odds,-oddsio"    → load all EXCEPT these (prefix with -)
 //   "us-major,-cfbd"   → a preset minus some of its members
@@ -207,13 +207,13 @@ async function main() {
   // Warn about tool bloat
   if (isAll) {
     console.error("");
-    console.error(`  ⚠ All ${Object.keys(PROVIDERS).length} providers loaded (419 tools).`);
+    console.error(`  ⚠ All ${Object.keys(PROVIDERS).length} providers loaded (421 tools).`);
     console.error("    LLMs work best with fewer tools. Consider using a preset:");
-    console.error("    SPORTS_HUB_PROVIDERS=free        → 20 providers, 172 tools (no keys needed)");
+    console.error("    SPORTS_HUB_PROVIDERS=free        → 20 providers, 174 tools (no keys needed)");
     console.error("    SPORTS_HUB_PROVIDERS=us-major    → 9 providers, ~93 tools");
     console.error("    SPORTS_HUB_PROVIDERS=motorsport  → 5 providers, ~42 tools (no keys needed)");
-    console.error("    SPORTS_HUB_PROVIDERS=soccer      → 9 providers, 80 tools");
-    console.error("    SPORTS_HUB_PROVIDERS=trading     → 8 providers, 78 tools (odds + backtesting)");
+    console.error("    SPORTS_HUB_PROVIDERS=soccer      → 9 providers, 82 tools");
+    console.error("    SPORTS_HUB_PROVIDERS=trading     → 8 providers, 80 tools (odds + prediction + backtesting)");
     console.error("");
   }
 

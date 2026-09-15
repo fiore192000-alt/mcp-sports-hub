@@ -1,6 +1,6 @@
 # Sports Hub MCP Server
 
-Unified MCP server — 43 providers, 419 tools, one process.
+Unified MCP server — 43 providers, 421 tools, one process.
 Covers: NFL, NBA, EuroLeague, MLB, NHL, Soccer, F1, MotoGP, Formula E, NASCAR, Tennis, Cricket, MMA, Boxing, Golf, Esports, Rugby, Volleyball, Handball, College Sports, Chess, AFL, NFL fantasy, betting/trading maths, and more.
 Also exposes MCP **resources** (provider/preset catalogs at `sportshub://...`) and **prompts** (curated workflows like `whats-on-today`, `compare-odds`, `motorsport-weekend`).
 
@@ -9,7 +9,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 
 ## Provider Reference
 
-### No API key required (20 providers, 172 tools)
+### No API key required (20 providers, 174 tools)
 
 | Prefix | Provider | Coverage | Tools |
 |--------|----------|----------|-------|
@@ -32,7 +32,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 | `sleeper_` | Sleeper | NFL fantasy: player search, injuries, trending, leagues, rosters | 10 |
 | `euroleague_` | EuroLeague Basketball | EuroLeague + EuroCup: games, clubs, boxscores, play-by-play | 6 |
 | `footballdata_uk_` | Football-Data.co.uk | Historical football results + bookmaker odds (CSV, 25+ leagues) | 2 |
-| `trading_` | Trading toolkit (local) | Betting maths: de-vig, EV/Kelly, arbitrage, hedging, Poisson model, historical backtest | 9 |
+| `trading_` | Trading toolkit (local) | Betting maths + prediction: de-vig, EV/Kelly, arbitrage, hedging, Poisson model, fixture predictions, forecast scoring, backtest | 11 |
 
 `sportsdb_` defaults to test key "3" (free, watermarked images). Set `THESPORTSDB_API_KEY` for a personal key.
 `sportsrc_` V1 endpoints are free with no key. V2 (xG, momentum, lineups) needs `SPORTSRC_API_KEY` and is currently NOT exposed.
@@ -78,6 +78,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 **Betting odds (historical, for backtesting)**: `footballdata_uk_get_matches` (results + closing odds, 2000-now)
 **Building a football trade**: `trading_devig_odds` (fair price from a market), `trading_poisson_model` / `trading_team_ratings` (own probabilities), `trading_evaluate_bet` (edge + Kelly stake), `trading_find_arbitrage`, `trading_hedge_position` (green-up / cash-out)
 **Testing a betting strategy**: `trading_backtest` (ROI, drawdown, CLV over 25 years of results + odds), `trading_list_strategies`, `trading_closing_line_value`
+**Predicting a round and tracking it**: `trading_predict_fixtures` (next fixtures priced against the market) → save the `predictions` array → `trading_score_predictions` after the matches (hit rate, RPS vs the market, calibration, P&L)
 **Basketball (beyond NBA)**: `euroleague_get_games`, `euroleague_get_game_boxscore` (EuroLeague + EuroCup), `bdl_get_*` (NBA)
 **Boxing**: `boxing_get_fighters`, `boxing_get_bouts`, `boxing_get_events` (distinct from MMA)
 **Video highlights**: `highlightly_get_highlights` (multi-sport clips)
@@ -124,8 +125,8 @@ Providers without published limits (ESPN, NHL, MLB, F1, OpenF1, OpenLigaDB, Golf
 
 ## Provider Filtering
 
-By default, only the `free` preset is loaded (20 providers, 172 tools — no API keys needed).
-Set `SPORTS_HUB_PROVIDERS=all` for all 43 providers (419 tools), but that many tools can overwhelm LLMs.
+By default, only the `free` preset is loaded (20 providers, 174 tools — no API keys needed).
+Set `SPORTS_HUB_PROVIDERS=all` for all 43 providers (421 tools), but that many tools can overwhelm LLMs.
 Use `SPORTS_HUB_PROVIDERS` to control which providers are active.
 
 ### Presets (recommended)
@@ -147,10 +148,10 @@ Use `SPORTS_HUB_PROVIDERS` to control which providers are active.
 ### Usage
 
 ```bash
-# Default — free preset, 20 no-key providers, 172 tools
+# Default — free preset, 20 no-key providers, 174 tools
 node dist/index.js
 
-# All 43 providers (419 tools)
+# All 43 providers (421 tools)
 SPORTS_HUB_PROVIDERS=all node dist/index.js
 
 # Preset — recommended for most users
@@ -185,9 +186,9 @@ In Claude Desktop config:
 ### Why filter?
 
 LLMs work best with fewer, focused tools. Recommendations:
-- **General use**: `free` preset (20 providers, 172 tools)
+- **General use**: `free` preset (20 providers, 174 tools)
 - **Specific sport**: use the sport preset (`f1`, `soccer`, `esports`, etc.)
-- **Full access**: `SPORTS_HUB_PROVIDERS=all` (419 tools — works but slower tool selection)
+- **Full access**: `SPORTS_HUB_PROVIDERS=all` (421 tools — works but slower tool selection)
 
 ## Transport
 

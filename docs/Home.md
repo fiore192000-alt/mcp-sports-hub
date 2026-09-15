@@ -1,6 +1,6 @@
 # Sports Hub MCP Server
 
-A unified [Model Context Protocol](https://modelcontextprotocol.io/) server that aggregates **43 sports API providers** into a single service. **419 tools** covering scores, stats, odds, esports, college sports, chess, AFL, and more across 70+ sports.
+A unified [Model Context Protocol](https://modelcontextprotocol.io/) server that aggregates **43 sports API providers** into a single service. **421 tools** covering scores, stats, odds, esports, college sports, chess, AFL, and more across 70+ sports.
 
 Works with any MCP client (Claude, ChatGPT, Gemini, Cursor, Windsurf, Continue, Cline, Zed) on macOS, Linux, and Windows.
 
@@ -32,11 +32,11 @@ Add to Claude Desktop config:
 }
 ```
 
-By default this loads the `free` preset (20 no-key providers, 172 tools) with zero configuration. Set `SPORTS_HUB_PROVIDERS=all` for all 43 providers (419 tools), or a preset like `us-major`, `soccer`, `f1`, `esports`, `odds`, `trading`, `chess`. See [Configuration](Configuration.md) for API key setup.
+By default this loads the `free` preset (20 no-key providers, 174 tools) with zero configuration. Set `SPORTS_HUB_PROVIDERS=all` for all 43 providers (421 tools), or a preset like `us-major`, `soccer`, `f1`, `esports`, `odds`, `trading`, `chess`. See [Configuration](Configuration.md) for API key setup.
 
 ## Providers
 
-### No API key required (20 providers, 172 tools)
+### No API key required (20 providers, 174 tools)
 
 | Prefix | Provider | Coverage | Tools |
 |--------|----------|----------|-------|
@@ -90,7 +90,8 @@ By default this loads the `free` preset (20 no-key providers, 172 tools) with ze
 ## Wiki Pages
 
 - **[Configuration](Configuration.md)** — Environment variables, API keys, Claude Desktop/Code/Windows/Linux setup
+- **[Predicting](Predicting.md)** — Predict a round, score the predictions against the market, week after week
 - **[Providers](Providers.md)** — Detailed reference for all 43 providers with full tool lists
-- **[Tools Reference](Tools-Reference.md)** — All 419 tools with descriptions and parameters
+- **[Tools Reference](Tools-Reference.md)** — All 421 tools with descriptions and parameters
 - **[Rate Limits](Rate-Limits.md)** — Rate limit details and strategies
 - **[Architecture](Architecture.md)** — Project structure, provider pattern, how to contribute

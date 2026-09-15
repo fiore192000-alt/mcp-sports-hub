@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete list of all **419 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
+Complete list of all **421 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
 
 ---
 
@@ -836,7 +836,7 @@ date: formatted YYYYMMDD
 
 ---
 
-## Trading Toolkit (`trading_`) — 9 tools
+## Trading Toolkit (`trading_`) — 11 tools
 
 Local computation — no API key. `trading_backtest` and `trading_team_ratings` read the keyless football-data.co.uk archive; the rest work entirely on numbers you pass in.
 
@@ -851,3 +851,5 @@ Local computation — no API key. `trading_backtest` and `trading_team_ratings` 
 | `trading_team_ratings` | Fit attack/defence strengths for a league from football-data.co.uk results, and optionally price a fixture with them (Poisson) and compare to market odds. Attack/defence are relative to the league venue average: 1.0 = average, 1.3 = 30% better. | **league**, **season**, extra_seasons?, half_life_days?, prior_matches?, as_of?, home?, away?, rho?, market_odds? |
 | `trading_backtest` | Backtest a football betting strategy on real historical results and bookmaker odds (football-data.co.uk, 2000-now, 20+ leagues). Returns ROI, P&L, strike rate, max drawdown, closing-line value and per-season/per-league breakdowns. Use trading_list_strategies first to pick a strategy. | **strategy**, leagues?, seasons?, phase?, book?, min_odds?, max_odds?, edge_pct?, markets?, min_history?, half_life_days?, rho?, staking?, unit?, percent?, kelly_fraction?, max_stake_pct?, bankroll?, commission_pct?, sample_bets? |
 | `trading_closing_line_value` | Measure your bets against the closing line — the single best evidence that a betting process has an edge, ahead of P&L. Give it the price you took and the closing price for each bet; outcomes are optional. | **bets**, closing_margin_pct?, commission_pct? |
+| `trading_predict_fixtures` | Predict upcoming football fixtures: fits team ratings on the season so far, prices every match in the next few days (1X2, over/under), compares against the bookmakers' own prices and flags where the model disagrees enough to bet. Returns prediction rows you can feed straight back into trading_score_predictions once the matches are played. | leagues?, season?, include_previous_season?, half_life_days?, prior_matches?, rho?, book?, days_ahead?, min_edge_pct?, markets?, bankroll?, kelly_fraction?, max_stake_pct?, limit? |
+| `trading_score_predictions` | Score predictions you made earlier against what actually happened: hit rate, ranked probability score and log loss, measured against the bookmakers' own prices as the benchmark, plus calibration and the P&L and closing-line value of any picks. Feed it the `predictions` array from trading_predict_fixtures. | **predictions**, season?, commission_pct?, sample? |

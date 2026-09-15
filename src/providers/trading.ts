@@ -2,8 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { errorResult, safe, toolResult } from "../shared/http.js";
 import {
-  BOOKS, FD_LEAGUES, type Book, type FdMatch, type FdOutcome, type OddsPhase,
-  fetchLeagueSeason, toMatches,
+  BOOKS, FD_LEAGUES, type Book, type FdFixture, type FdMatch, type FdOutcome, type OddsPhase,
+  fetchFixtures, fetchLeagueSeason, normalizeTeam, toFixtures, toMatches,
 } from "../shared/football-csv.js";
 import {
   type DevigMethod, type RatedMatch, type RatingsFit,
@@ -12,7 +12,7 @@ import {
 } from "../shared/betting-math.js";
 
 // ---------------------------------------------------------------------------
-// Trading toolkit — 9 tools
+// Trading toolkit — 11 tools
 // Auth: none. No upstream API except football-data.co.uk (already keyless),
 //   reached through the shared CSV loader.
 //
@@ -64,6 +64,28 @@ function recentSeasons(n: number): string[] {
   const startYear = now.getUTCMonth() >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
   return Array.from({ length: n }, (_, i) => seasonCode(startYear - (n - 1 - i)));
 }
+
+/** The season currently in progress (European calendar: July starts one). */
+function currentSeason(): string {
+  const now = new Date();
+  return seasonCode(now.getUTCMonth() >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1);
+}
+
+/** The season before a given code: "2627" -> "2526". */
+function previousSeason(code: string): string {
+  const start = Number.parseInt(code.slice(0, 2), 10);
+  return `${String((start + 99) % 100).padStart(2, "0")}${String(start).padStart(2, "0")}`;
+}
+
+/** Season code covering a date, same July boundary as currentSeason(). */
+function seasonForDate(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return seasonCode(d.getUTCMonth() >= 6 ? d.getUTCFullYear() : d.getUTCFullYear() - 1);
+}
+
+/** Outcome keys as they appear in a prediction row. */
+const PICK_OUTCOMES = { home: "H", draw: "D", away: "A", over25: "O25", under25: "U25" } as const;
+type PickKey = keyof typeof PICK_OUTCOMES;
 
 function splitList(raw: string): string[] {
   return raw.split(",").map((s) => s.trim()).filter(Boolean);
@@ -758,6 +780,392 @@ export function register(server: McpServer): void {
             ? "Roughly level with the close. Your process is tracking the market, not beating it; P&L over this sample is mostly variance."
             : "Losing to the close. Whatever the P&L says, the prices you took were worse than the market's final word.",
         detail: rows,
+      });
+    }),
+  );
+
+  // 10. predict upcoming fixtures
+  server.tool(
+    "trading_predict_fixtures",
+    "Predict upcoming football fixtures: fits team ratings on the season so far, prices every match in the next few days (1X2, over/under), compares against the bookmakers' own prices and flags where the model disagrees enough to bet. Returns prediction rows you can feed straight back into trading_score_predictions once the matches are played.",
+    {
+      leagues: z.string().optional().describe('Comma-separated league codes, e.g. "I1,E0" (default "E0"). Max 8.'),
+      season: z.string().regex(/^\d{4}$/).optional().describe('Season to rate teams from, e.g. "2627" (default: the season in progress)'),
+      include_previous_season: z.boolean().optional().describe("Pool the previous season into the ratings (default true — essential early on, when the current season is only a few rounds old)"),
+      half_life_days: z.number().positive().optional().describe("Recency weighting: a result this many days old counts half (default 240)"),
+      prior_matches: z.number().min(0).max(50).optional().describe("Shrinkage toward league average, in matches of prior weight (default 4)"),
+      rho: z.number().gte(-0.3).lte(0.3).optional().describe("Dixon-Coles low-score correction (default -0.1)"),
+      book: z.enum(["avg", "max", "b365", "pinnacle"]).optional().describe("Which market price to compare against (default avg)"),
+      days_ahead: z.number().int().min(1).max(30).optional().describe("Only fixtures kicking off within this many days (default 10)"),
+      min_edge_pct: z.number().min(0).max(100).optional().describe("Edge required before a fixture gets a suggested pick (default 5)"),
+      markets: z.enum(["1x2", "ou25", "both"]).optional().describe("Markets to consider for the pick (default both)"),
+      bankroll: z.number().positive().optional().describe("Bankroll for stake sizing (default 100)"),
+      kelly_fraction: z.number().gt(0).lte(1).optional().describe("Fraction of full Kelly (default 0.25)"),
+      max_stake_pct: z.number().gt(0).lte(100).optional().describe("Cap per bet as % of bankroll (default 5)"),
+      limit: z.number().int().min(1).max(60).optional().describe("Max fixtures to return (default 20)"),
+    },
+    safe(async (args) => {
+      const leagues = (args.leagues ? splitList(args.leagues) : ["E0"]).map((l) => l.toUpperCase());
+      if (leagues.length > 8) return errorResult(`${leagues.length} leagues requested; the cap is 8 per call.`);
+      const season = args.season ?? currentSeason();
+      const includePrevious = args.include_previous_season ?? true;
+      const book = (args.book ?? "avg") as Book;
+      const rho = args.rho ?? -0.1;
+      const minEdge = args.min_edge_pct ?? 5;
+      const markets = args.markets ?? "both";
+      const now = Date.now();
+      const horizon = now + (args.days_ahead ?? 10) * 86_400_000;
+
+      let fixtures: FdFixture[];
+      try {
+        fixtures = toFixtures(await fetchFixtures(), book, leagues);
+      } catch (err) {
+        return errorResult(`Could not read the upcoming-fixtures file: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      const upcoming = fixtures
+        .filter((f) => f.ts <= horizon && f.ts >= now - 2 * 86_400_000)
+        .slice(0, args.limit ?? 20);
+
+      if (upcoming.length === 0) {
+        return toolResult({
+          season, leagues,
+          fixtures_found: fixtures.length,
+          predictions: [],
+          note: fixtures.length
+            ? `The fixtures file has ${fixtures.length} match(es) for ${leagues.join(",")}, none inside the next ${args.days_ahead ?? 10} days. Widen days_ahead.`
+            : `No upcoming fixtures for ${leagues.join(",")} in football-data.co.uk's fixtures file. It covers roughly the next week and is empty mid-break.`,
+        });
+      }
+
+      // Ratings per league, fitted on the seasons requested.
+      const fits = new Map<string, RatingsFit>();
+      const ratingNotes: string[] = [];
+      for (const league of new Set(upcoming.map((f) => f.league))) {
+        const seasons = includePrevious ? [previousSeason(season), season] : [season];
+        const rated: RatedMatch[] = [];
+        for (const code of seasons) {
+          try {
+            const rows = await fetchLeagueSeason(league, code);
+            for (const m of toMatches(rows, league, code, book)) {
+              rated.push({ home: m.home, away: m.away, homeGoals: m.homeGoals, awayGoals: m.awayGoals, ts: m.ts });
+            }
+          } catch {
+            ratingNotes.push(`${league} ${code}: no data (skipped)`);
+          }
+        }
+        if (rated.length) {
+          fits.set(league, fitRatings(rated, {
+            half_life_days: args.half_life_days ?? 240,
+            prior_matches: args.prior_matches,
+            as_of: now,
+          }));
+        }
+      }
+
+      const bankroll = args.bankroll ?? 100;
+      const predictions: Array<Record<string, unknown>> = [];
+      const unrated: Array<Record<string, string>> = [];
+
+      for (const f of upcoming) {
+        const fit = fits.get(f.league);
+        const xg = fit ? expectedGoals(fit, f.home, f.away) : null;
+        if (!fit || !xg) {
+          unrated.push({
+            league: f.league, date: f.date, match: `${f.home} v ${f.away}`,
+            reason: !fit ? "no rated matches for this league/season" : "one of these teams has no history in the rated seasons (newly promoted?)",
+          });
+          continue;
+        }
+        const model = matchModel(xg.home, xg.away, { rho });
+        const modelProb: Record<PickKey, number> = {
+          home: model.probabilities.home,
+          draw: model.probabilities.draw,
+          away: model.probabilities.away,
+          over25: model.probabilities.over["2.5"],
+          under25: model.probabilities.under["2.5"],
+        };
+
+        const marketOdds: Partial<Record<PickKey, number>> = {};
+        for (const [key, outcome] of Object.entries(PICK_OUTCOMES) as Array<[PickKey, FdOutcome]>) {
+          const price = f.prices[outcome]?.odds;
+          if (price) marketOdds[key] = asOdds(price);
+        }
+
+        // De-vigged market view of the 1X2 market, for a like-for-like comparison.
+        let marketProb: Partial<Record<PickKey, number>> = {};
+        if (marketOdds.home && marketOdds.draw && marketOdds.away) {
+          const fair = devig([marketOdds.home, marketOdds.draw, marketOdds.away], "shin").probabilities;
+          marketProb = { home: fair[0], draw: fair[1], away: fair[2] };
+        }
+
+        const candidateKeys: PickKey[] = markets === "ou25"
+          ? ["over25", "under25"]
+          : markets === "1x2" ? ["home", "draw", "away"] : ["home", "draw", "away", "over25", "under25"];
+        const selections = candidateKeys
+          .filter((k) => marketOdds[k] !== undefined)
+          .map((k) => ({ name: k, odds: marketOdds[k] as number, probability: modelProb[k] }));
+        const assessed = selections.length
+          ? assessSelections(selections, {
+              bankroll,
+              kelly_fraction: args.kelly_fraction,
+              max_stake_pct: args.max_stake_pct,
+              min_edge_pct: minEdge,
+            })
+          : null;
+
+        predictions.push({
+          date: f.date,
+          ...(f.time ? { time: f.time } : {}),
+          league: f.league,
+          home: f.home,
+          away: f.away,
+          expected_goals: { home: round(xg.home, 2), away: round(xg.away, 2) },
+          prob_home: asProb(modelProb.home),
+          prob_draw: asProb(modelProb.draw),
+          prob_away: asProb(modelProb.away),
+          prob_over25: asProb(modelProb.over25),
+          most_likely: (["home", "draw", "away"] as PickKey[]).reduce((a, b) => (modelProb[b] > modelProb[a] ? b : a)),
+          ...(Object.keys(marketOdds).length ? { market_odds: marketOdds } : {}),
+          ...(marketProb.home !== undefined ? {
+            market_prob_home: asProb(marketProb.home as number),
+            market_prob_draw: asProb(marketProb.draw as number),
+            market_prob_away: asProb(marketProb.away as number),
+          } : {}),
+          ...(assessed?.best ? {
+            pick: {
+              outcome: assessed.best.name,
+              odds: assessed.best.odds,
+              edge_pct: assessed.best.edge_pct,
+              stake: assessed.best.stake,
+            },
+          } : {}),
+        });
+      }
+
+      const withPick = predictions.filter((p) => p.pick !== undefined);
+      return toolResult({
+        season,
+        leagues,
+        rated_from: includePrevious ? [previousSeason(season), season] : [season],
+        model: { half_life_days: args.half_life_days ?? 240, rho, book, min_edge_pct: minEdge, markets },
+        fixtures_priced: predictions.length,
+        picks_suggested: withPick.length,
+        total_stake: round(withPick.reduce((a, p) => a + ((p.pick as { stake: number }).stake ?? 0), 0), 2),
+        predictions,
+        ...(unrated.length ? { unrated } : {}),
+        ...(ratingNotes.length ? { rating_notes: ratingNotes } : {}),
+        next_step: "Save this `predictions` array. Once the matches are played, pass it to trading_score_predictions to see how the model actually did — hit rate, RPS and log loss against the market's own prices, plus the P&L of the picks.",
+        caveats: [
+          "Ratings come from goals alone: no injuries, suspensions, European fixtures or rotation.",
+          "Early in a season the ratings are mostly the previous season plus the prior — expect the market to be better informed than the model until a few rounds are in.",
+          "A suggested pick is a model disagreement with the market, not a tip. The market is right more often than it is wrong.",
+        ],
+      });
+    }),
+  );
+
+  // 11. score predictions once the matches are played
+  server.tool(
+    "trading_score_predictions",
+    "Score predictions you made earlier against what actually happened: hit rate, ranked probability score and log loss, measured against the bookmakers' own prices as the benchmark, plus calibration and the P&L and closing-line value of any picks. Feed it the `predictions` array from trading_predict_fixtures.",
+    {
+      predictions: z.array(z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Match date, YYYY-MM-DD"),
+        league: z.string().describe('League code, e.g. "I1"'),
+        home: z.string().describe("Home team, as named in the football-data archive"),
+        away: z.string().describe("Away team"),
+        prob_home: z.number().gt(0).lt(1),
+        prob_draw: z.number().gt(0).lt(1),
+        prob_away: z.number().gt(0).lt(1),
+        market_odds: z.object({
+          home: z.number().gt(1).optional(),
+          draw: z.number().gt(1).optional(),
+          away: z.number().gt(1).optional(),
+        }).optional().describe("Prices at prediction time — used as the benchmark to beat"),
+        pick: z.object({
+          outcome: z.enum(["home", "draw", "away", "over25", "under25"]),
+          odds: z.number().gt(1),
+          stake: z.number().min(0).optional(),
+        }).optional().describe("The bet you took, if any"),
+      })).min(1).max(300).describe("Predictions to score — the array trading_predict_fixtures returned"),
+      season: z.string().regex(/^\d{4}$/).optional().describe("Season to look results up in (default: derived from each prediction's date)"),
+      commission_pct: z.number().min(0).lt(100).optional().describe("Commission on winnings, % (default 0)"),
+      sample: z.number().int().min(0).max(60).optional().describe("How many scored matches to list individually (default 10)"),
+    },
+    safe(async ({ predictions, season, commission_pct, sample }) => {
+      const commission = (commission_pct ?? 0) / 100;
+
+      // Results, one CSV per league-season the predictions touch.
+      const needed = new Set(predictions.map((p) => `${p.league.toUpperCase()}|${season ?? seasonForDate(p.date)}`));
+      if (needed.size > 20) return errorResult(`These predictions span ${needed.size} league-seasons, over the 20-file cap. Score them in batches.`);
+      const results = new Map<string, FdMatch>();
+      const unavailable: string[] = [];
+      for (const key of needed) {
+        const [league, code] = key.split("|");
+        try {
+          for (const m of toMatches(await fetchLeagueSeason(league, code), league, code)) {
+            results.set(`${league}|${normalizeTeam(m.home)}|${normalizeTeam(m.away)}`, m);
+          }
+        } catch (err) {
+          unavailable.push(`${league} ${code} (${err instanceof Error ? err.message.slice(0, 60) : "fetch failed"})`);
+        }
+      }
+
+      // Long-run 1X2 base rates, the "know nothing" benchmark.
+      const CLIMATOLOGY = { home: 0.44, draw: 0.26, away: 0.30 };
+      const clamp = (p: number) => Math.min(1 - 1e-6, Math.max(1e-6, p));
+      const rps = (p: [number, number, number], actual: 0 | 1 | 2) => {
+        let cumP = 0, cumA = 0, total = 0;
+        for (let i = 0; i < 2; i++) {
+          cumP += p[i];
+          cumA += actual === i ? 1 : 0;
+          total += (cumP - cumA) ** 2;
+        }
+        return total / 2;
+      };
+      const brier = (p: [number, number, number], actual: 0 | 1 | 2) =>
+        p.reduce((acc, prob, i) => acc + (prob - (actual === i ? 1 : 0)) ** 2, 0);
+
+      const scored: Array<Record<string, unknown>> = [];
+      const pending: Array<Record<string, string>> = [];
+      let hits = 0, modelRps = 0, modelBrier = 0, modelLogLoss = 0;
+      let marketRps = 0, marketLogLoss = 0, marketCount = 0, marketHits = 0;
+      let climRps = 0, climLogLoss = 0;
+      let picks = 0, pickWins = 0, staked = 0, pnl = 0, clvSum = 0, clvCount = 0;
+      const buckets = new Map<number, { predicted: number; observed: number; n: number }>();
+
+      for (const p of predictions) {
+        const league = p.league.toUpperCase();
+        const match = results.get(`${league}|${normalizeTeam(p.home)}|${normalizeTeam(p.away)}`);
+        if (!match) {
+          pending.push({ date: p.date, league, match: `${p.home} v ${p.away}`, status: "no result in the archive yet (not played, or a name mismatch)" });
+          continue;
+        }
+        const actual: 0 | 1 | 2 = match.result === "H" ? 0 : match.result === "D" ? 1 : 2;
+        const modelP: [number, number, number] = [p.prob_home, p.prob_draw, p.prob_away];
+        const predictedIndex = modelP.indexOf(Math.max(...modelP)) as 0 | 1 | 2;
+        const hit = predictedIndex === actual;
+        if (hit) hits++;
+        modelRps += rps(modelP, actual);
+        modelBrier += brier(modelP, actual);
+        modelLogLoss += -Math.log(clamp(modelP[actual]));
+        climRps += rps([CLIMATOLOGY.home, CLIMATOLOGY.draw, CLIMATOLOGY.away], actual);
+        climLogLoss += -Math.log(clamp([CLIMATOLOGY.home, CLIMATOLOGY.draw, CLIMATOLOGY.away][actual]));
+
+        // Calibration: every predicted probability counts, not just the pick.
+        modelP.forEach((prob, i) => {
+          const bucket = Math.min(9, Math.floor(prob * 10));
+          const b = buckets.get(bucket) ?? { predicted: 0, observed: 0, n: 0 };
+          b.predicted += prob; b.observed += actual === i ? 1 : 0; b.n++;
+          buckets.set(bucket, b);
+        });
+
+        let marketP: [number, number, number] | undefined;
+        const mo = p.market_odds;
+        if (mo?.home && mo.draw && mo.away) {
+          const fair = devig([mo.home, mo.draw, mo.away], "shin").probabilities as [number, number, number];
+          marketP = fair;
+          marketRps += rps(fair, actual);
+          marketLogLoss += -Math.log(clamp(fair[actual]));
+          if ((fair.indexOf(Math.max(...fair)) as 0 | 1 | 2) === actual) marketHits++;
+          marketCount++;
+        }
+
+        let pickRow: Record<string, unknown> | undefined;
+        if (p.pick) {
+          const outcome = PICK_OUTCOMES[p.pick.outcome];
+          const stake = p.pick.stake ?? 1;
+          const winner = won(match, outcome);
+          const profit = winner ? stake * (p.pick.odds - 1) * (1 - commission) : -stake;
+          picks++; staked += stake; pnl += profit;
+          if (winner) pickWins++;
+          const closing = match.prices.close[outcome]?.odds ?? match.prices.open[outcome]?.odds;
+          if (closing) { clvSum += p.pick.odds / closing - 1; clvCount++; }
+          pickRow = {
+            outcome: p.pick.outcome, odds: p.pick.odds, stake: round(stake, 2),
+            result: winner ? "won" : "lost", pnl: round(profit, 2),
+            ...(closing ? { closing_odds: asOdds(closing), clv_pct: asPct(p.pick.odds / closing - 1) } : {}),
+          };
+        }
+
+        scored.push({
+          date: match.date, league, match: `${match.home} v ${match.away}`,
+          score: `${match.homeGoals}-${match.awayGoals}`,
+          actual: match.result === "H" ? "home" : match.result === "D" ? "draw" : "away",
+          predicted: (["home", "draw", "away"] as const)[predictedIndex],
+          predicted_probability: asProb(modelP[predictedIndex]),
+          probability_of_actual: asProb(modelP[actual]),
+          hit,
+          rps: round(rps(modelP, actual), 4),
+          ...(marketP ? { market_rps: round(rps(marketP, actual), 4) } : {}),
+          ...(pickRow ? { pick: pickRow } : {}),
+        });
+      }
+
+      const n = scored.length;
+      if (n === 0) {
+        return toolResult({
+          scored: 0,
+          pending,
+          ...(unavailable.length ? { unavailable } : {}),
+          note: "None of these predictions has a result yet. Come back after the matches are played — or check that the team names match the football-data archive exactly (trading_predict_fixtures emits them in that form).",
+        });
+      }
+
+      const modelRpsAvg = modelRps / n;
+      const marketRpsAvg = marketCount ? marketRps / marketCount : null;
+      const skill = marketRpsAvg !== null && marketRpsAvg > 0 ? 1 - modelRpsAvg / marketRpsAvg : null;
+
+      return toolResult({
+        scored: n,
+        pending_count: pending.length,
+        accuracy: {
+          hits,
+          hit_rate_pct: asPct(hits / n),
+          ...(marketCount ? { market_hit_rate_pct: asPct(marketHits / marketCount), market_hit_rate_sample: marketCount } : {}),
+        },
+        probability_scores: {
+          rps: round(modelRpsAvg, 4),
+          brier: round(modelBrier / n, 4),
+          log_loss: round(modelLogLoss / n, 4),
+          note: "Ranked probability score is the standard 1X2 metric — lower is better, 0 is perfect. It penalises being confidently wrong, unlike hit rate.",
+        },
+        benchmarks: {
+          ...(marketRpsAvg !== null ? {
+            market: { rps: round(marketRpsAvg, 4), log_loss: round(marketLogLoss / marketCount, 4), matches: marketCount },
+            skill_vs_market_pct: skill !== null ? asPct(skill) : null,
+          } : {}),
+          base_rates: { rps: round(climRps / n, 4), log_loss: round(climLogLoss / n, 4), note: "Predicting the long-run 44/26/30 split for every match." },
+        },
+        calibration: [...buckets.entries()].sort(([a], [b]) => a - b).map(([bucket, b]) => ({
+          predicted_range: `${bucket * 10}-${bucket * 10 + 10}%`,
+          predictions: b.n,
+          average_predicted_pct: asPct(b.predicted / b.n),
+          actual_pct: asPct(b.observed / b.n),
+        })),
+        ...(picks ? {
+          picks: {
+            bets: picks,
+            wins: pickWins,
+            strike_rate_pct: asPct(pickWins / picks),
+            staked: round(staked, 2),
+            profit: round(pnl, 2),
+            roi_pct: asPct(pnl / staked),
+            ...(clvCount ? { average_clv_pct: asPct(clvSum / clvCount), clv_measured: clvCount } : {}),
+          },
+        } : {}),
+        sample_matches: scored.slice(0, sample ?? 10),
+        ...(pending.length ? { pending: pending.slice(0, 20) } : {}),
+        ...(unavailable.length ? { unavailable } : {}),
+        verdict: skill === null
+          ? `${n} matches scored. Record the market odds alongside your predictions to get the benchmark that matters — beating the closing market, not beating a coin flip.`
+          : skill > 0
+            ? `The model's RPS is ${asPct(skill)}% better than the market's over ${marketCount} matches. Encouraging, but under a few hundred matches this gap is well inside noise.`
+            : `The market scored better (model RPS ${round(modelRpsAvg, 4)} vs ${round(marketRpsAvg as number, 4)}). Normal: bookmakers price with team news and money flow the model never sees.`,
+        caveats: [
+          n < 50 ? `${n} matches is a very small sample — RPS differences this size are mostly luck.` : "Keep adding matches: forecast skill only separates from noise over hundreds of them.",
+          "Predictions must be made BEFORE kick-off for any of this to mean anything. Scoring a prediction generated after the result is self-deception, and nothing here can detect it.",
+        ],
       });
     }),
   );

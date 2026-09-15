@@ -183,4 +183,32 @@ export function registerPrompts(server: McpServer): void {
         "Conclude with whether the result survives, and state the sample size plainly — under a few hundred bets, say so.",
       ),
   );
+
+  // 9. predict a round and track how the predictions do
+  server.registerPrompt(
+    "predict-and-track",
+    {
+      title: "Predict a round and track it",
+      description: "Predict the coming fixtures, then score the last batch of predictions against what happened.",
+      argsSchema: {
+        leagues: completable(
+          z.string().optional().describe("League codes, e.g. I1,E0 (default E0)"),
+          (value) => FD_LEAGUE_CODES.filter((l) => l.startsWith((value ?? "").toUpperCase())),
+        ),
+        season: z.string().optional().describe('Season code, e.g. "2627" (optional — defaults to the season in progress)'),
+      },
+    },
+    async ({ leagues, season }) =>
+      userText(
+        `Run the prediction loop for ${leagues ?? "E0"}${season ? ` (season ${season})` : ""}.\n` +
+        "1. SCORE FIRST: if I gave you predictions from a previous run, pass them to `trading_score_predictions` before anything else. " +
+        "Report hit rate, RPS vs the market's RPS, calibration and the P&L of any picks. Scoring after seeing new predictions is how people fool themselves.\n" +
+        "2. PREDICT: call `trading_predict_fixtures` for the next round. Show every fixture with the model's 1X2 probabilities next to the " +
+        "de-vigged market probabilities, so the disagreements are visible.\n" +
+        "3. Flag the picks (where the model's edge clears the threshold) with their stakes, and say plainly which ones rest on thin ratings " +
+        "(newly promoted sides, teams with few matches this season).\n" +
+        "4. Give me the `predictions` array back verbatim in a code block, so I can save it and hand it to you next time for scoring.\n" +
+        "Be honest about sample size: under a few hundred scored matches, any gap between the model and the market is noise.",
+      ),
+  );
 }

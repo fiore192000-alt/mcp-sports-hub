@@ -6,10 +6,12 @@ All notable changes to this project are documented here. This project follows [s
 
 Context cost, multi-client correctness, and a football trading toolkit.
 
-### Added — `trading_` provider (9 tools, no API key)
+### Added — `trading_` provider (11 tools, no API key)
 
-Turns prices into positions, and lets you test the idea on history before staking anything:
+Predicts matches, scores those predictions honestly, turns prices into positions, and lets you test an idea on history before staking anything:
 
+- `trading_predict_fixtures` — fit ratings on the season so far, price every fixture in the next few days, and compare against the bookmakers' own (de-vigged) prices. Emits prediction rows shaped for the scorer.
+- `trading_score_predictions` — score those predictions once the matches are played: hit rate, ranked probability score, Brier, log loss, calibration buckets, and the P&L and closing-line value of any picks — all benchmarked against the market's own prices rather than a coin flip.
 - `trading_backtest` — run a strategy over real results + bookmaker odds (football-data.co.uk, 2000-now, 20+ leagues) and get ROI, strike rate, max drawdown, closing-line value and per-season/per-league breakdowns. Strategies: flat sides (`home`/`draw`/`away`/`favourite`/`underdog`/`over25`/`under25`), `value_model` (walk-forward Poisson ratings, no lookahead) and `clv_steam` (opening price vs the de-vigged close). Flat, percent-of-bank or fractional Kelly staking.
 - `trading_team_ratings` — attack/defence strengths fitted from a league's results, with optional recency decay, shrinkage and fixture pricing.
 - `trading_poisson_model` — 1X2, over/under, BTTS and correct score from expected goals, with an optional Dixon-Coles low-score correction.
@@ -20,9 +22,9 @@ Turns prices into positions, and lets you test the idea on history before stakin
 - `trading_closing_line_value` — measure bets you actually made against the close.
 - `trading_list_strategies` — the strategy/staking/price-source reference, with the data caveats.
 
-Every backtest result ships with its caveats (assumed fills, sample size, the risk of tuning on the same data). New `trading` preset; the provider also joins `free`, `soccer` and `odds`. New prompts: `build-football-trade`, `backtest-football-strategy`.
+Every backtest result ships with its caveats (assumed fills, sample size, the risk of tuning on the same data). New `trading` preset; the provider also joins `free`, `soccer` and `odds`. New prompts: `build-football-trade`, `backtest-football-strategy`, `predict-and-track`.
 
-Totals: **43 providers / 419 tools** (up from 42 / 410). `footballdata_uk_` now shares the CSV loader with the new provider — same tools, same behaviour.
+Totals: **43 providers / 421 tools** (up from 42 / 410). `footballdata_uk_` now shares the CSV loader with the new provider — same tools, same behaviour.
 
 ### Fixed
 - **HTTP mode served only one client.** A single `StreamableHTTPServerTransport` was shared by every request, so the second client to `initialize` got `400 Invalid Request: Server already initialized`. This affected the Smithery-hosted endpoint, which is HTTP by definition. Each client now gets its own session (or set `SPORTS_HUB_STATELESS=1` for a throwaway server per request).
@@ -37,7 +39,7 @@ Totals: **43 providers / 419 tools** (up from 42 / 410). `footballdata_uk_` now 
 - **In-flight coalescing.** Concurrent identical requests share one upstream call.
 - **Negative caching** of `404`/`410` for 30s, so a wrong ID is not re-fetched in a loop.
 - **Server instructions** describing `fields` once at connect time rather than on 396 tool schemas.
-- 22 tests covering projection, slimming, capping, retries, coalescing and cache isolation, plus 46 for the trading maths, the archive's odds columns and the backtest engine (246 total).
+- 22 tests covering projection, slimming, capping, retries, coalescing and cache isolation, plus 53 for the trading maths, the archive's odds columns, the backtest engine and the predict/score loop (253 total).
 
 ### Changed
 - Tool results are serialized compactly. The previous `JSON.stringify(data, null, 2)` spent 56% of the bytes on indentation no model reads.

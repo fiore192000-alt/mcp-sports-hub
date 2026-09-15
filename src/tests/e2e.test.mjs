@@ -124,6 +124,7 @@ const TEST_CASES = {
     // These two read the football-data.co.uk archive.
     { tool: "trading_team_ratings", args: { league: "E0", season: "2425", home: "Arsenal", away: "Chelsea" } },
     { tool: "trading_backtest", args: { strategy: "home", leagues: "E0", seasons: "2425", sample_bets: 2 } },
+    { tool: "trading_predict_fixtures", args: { leagues: "E0", days_ahead: 14, limit: 5 } },
   ],
 
   // ─── Key-required providers (skipped if env key missing) ─────────────────

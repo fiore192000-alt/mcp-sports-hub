@@ -55,6 +55,9 @@ export function parseCsv(text: string): Array<Record<string, string>> {
   return out;
 }
 
+/** Upcoming fixtures across every league, with opening prices attached. */
+export const FD_FIXTURES_PATH = "/fixtures.csv";
+
 /** Fetch and parse one league-season CSV. Historical data — cached an hour. */
 export async function fetchLeagueSeason(league: string, season: string): Promise<Array<Record<string, string>>> {
   const csv = await fetchText(
@@ -62,6 +65,15 @@ export async function fetchLeagueSeason(league: string, season: string): Promise
     { cacheTtl: 3600 },
   );
   return parseCsv(csv);
+}
+
+/**
+ * Fetch the upcoming-fixtures file. One file covers every league, so callers
+ * filter by `Div` rather than fetching per league. Cached 15 minutes: prices
+ * move, and this is the one football-data file that is not historical.
+ */
+export async function fetchFixtures(): Promise<Array<Record<string, string>>> {
+  return parseCsv(await fetchText(`${FD_BASE}${FD_FIXTURES_PATH}`, { cacheTtl: 900 }));
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +156,57 @@ export interface FdMatch {
   totalGoals: number;
   /** Prices by phase and outcome, with the book each came from. */
   prices: Record<OddsPhase, Partial<Record<FdOutcome, { odds: number; book: Book }>>>;
+}
+
+export interface FdFixture {
+  league: string;
+  date: string;
+  ts: number;
+  time?: string;
+  home: string;
+  away: string;
+  /** Opening prices; a fixture has no closing line yet by definition. */
+  prices: Partial<Record<FdOutcome, { odds: number; book: Book }>>;
+}
+
+/** Team names are identical across the archive's files, but guard anyway. */
+export function normalizeTeam(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Normalize rows from fixtures.csv into upcoming fixtures. Rows for matches
+ * that already have a result are dropped — the file occasionally trails one.
+ */
+export function toFixtures(
+  rows: Array<Record<string, string>>,
+  book: Book = "avg",
+  leagues?: string[],
+): FdFixture[] {
+  const wanted = leagues && leagues.length ? new Set(leagues.map((l) => l.toUpperCase())) : undefined;
+  const out: FdFixture[] = [];
+  for (const row of rows) {
+    const league = (row.Div ?? "").toUpperCase();
+    const ts = parseFdDate(row.Date);
+    const home = row.HomeTeam, away = row.AwayTeam;
+    if (ts === undefined || !home || !away) continue;
+    if (wanted && !wanted.has(league)) continue;
+    if (row.FTR) continue;
+
+    const prices: FdFixture["prices"] = {};
+    for (const outcome of ["H", "D", "A", "O25", "U25"] as FdOutcome[]) {
+      const p = priceFor(row, "open", book, outcome);
+      if (p) prices[outcome] = p;
+    }
+    out.push({
+      league,
+      date: new Date(ts).toISOString().slice(0, 10),
+      ts,
+      ...(row.Time ? { time: row.Time } : {}),
+      home, away, prices,
+    });
+  }
+  return out.sort((a, b) => a.ts - b.ts);
 }
 
 /**

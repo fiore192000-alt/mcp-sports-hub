@@ -515,3 +515,153 @@ describe("walk-forward value model (stubbed CSV)", () => {
     assert.ok(data.results.bankroll_end > 1000, "a winning model compounds");
   });
 });
+
+describe("predicting and scoring (stubbed CSVs)", () => {
+  const tools = new Map();
+  let realFetch;
+
+  const iso = (offsetDays) => new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
+  const fdDate = (offsetDays) => { const [y, m, d] = iso(offsetDays).split("-"); return `${d}/${m}/${y}`; };
+
+  // History: Strong beats everyone, Weak loses to everyone, the Mids draw.
+  const teams = ["Strong", "MidA", "MidB", "Weak"];
+  const goalsFor = { Strong: 3, MidA: 1, MidB: 1, Weak: 0 };
+  const historyRows = ["Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,AvgH,AvgD,AvgA,Avg>2.5,Avg<2.5,AvgCH,AvgCD,AvgCA"];
+  let back = 200;
+  for (let leg = 0; leg < 3; leg++) {
+    for (const home of teams) for (const away of teams) {
+      if (home === away) continue;
+      const hg = goalsFor[home], ag = goalsFor[away];
+      historyRows.push(`E0,${fdDate(-back--)},${home},${away},${hg},${ag},${hg > ag ? "H" : hg === ag ? "D" : "A"},2.50,3.40,3.00,1.90,1.90,2.50,3.40,3.00`);
+    }
+  }
+  // Two of those fixtures are also the ones we will "predict" and then score.
+  historyRows.push(`E0,${fdDate(-3)},Strong,Weak,3,0,H,1.30,5.00,9.00,1.60,2.30,1.28,5.20,9.50`);
+  historyRows.push(`E0,${fdDate(-2)},MidA,MidB,1,1,D,2.60,3.30,2.80,1.95,1.85,2.55,3.30,2.90`);
+  const HISTORY = historyRows.join("\n") + "\n";
+
+  // Upcoming: flat prices, so the model's view is what drives every pick.
+  const FIXTURES = [
+    "Div,Date,Time,HomeTeam,AwayTeam,AvgH,AvgD,AvgA,Avg>2.5,Avg<2.5",
+    `E0,${fdDate(2)},15:00,Strong,Weak,2.50,3.40,3.00,1.90,1.90`,
+    `E0,${fdDate(3)},17:30,MidA,MidB,2.50,3.40,3.00,1.90,1.90`,
+    `I1,${fdDate(2)},20:45,Roma,Lazio,2.20,3.30,3.40,1.85,1.95`,
+    `E0,${fdDate(25)},15:00,Strong,MidA,2.50,3.40,3.00,1.90,1.90`,
+    "",
+  ].join("\n");
+
+  before(() => {
+    trading.register({ tool: (name, description, schema, handler) => tools.set(name, handler) });
+    realFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      const body = String(url).includes("/fixtures.csv") ? FIXTURES : HISTORY;
+      return { ok: true, status: 200, statusText: "OK", headers: new Headers(), text: async () => body };
+    };
+  });
+  after(() => { globalThis.fetch = realFetch; });
+
+  const call = async (name, args) => {
+    const result = await tools.get(name)(args);
+    assert.notEqual(result.isError, true, result.content[0].text);
+    return JSON.parse(result.content[0].text);
+  };
+
+  it("prices the upcoming fixtures and keeps the far-off ones out", async () => {
+    const data = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10 });
+    assert.equal(data.predictions.length, 2, "the fixture 25 days out is outside the horizon");
+    const strong = data.predictions.find((p) => p.home === "Strong");
+    assert.equal(strong.most_likely, "home");
+    assert.ok(strong.prob_home > strong.prob_away, "the dominant side should be favoured");
+    close(strong.prob_home + strong.prob_draw + strong.prob_away, 1, 1e-4, "1X2 sum");
+    assert.ok(strong.expected_goals.home > strong.expected_goals.away);
+    assert.ok(strong.market_prob_home > 0 && strong.market_prob_home < 1, "market prices are de-vigged for comparison");
+    assert.ok(strong.pick, "a flat 2.50 on a dominant home side is an edge the model should take");
+    assert.ok(strong.pick.stake > 0);
+  });
+
+  it("filters by league and reports teams it cannot rate", async () => {
+    const data = await call("trading_predict_fixtures", { leagues: "I1", season: "2627", days_ahead: 10 });
+    assert.equal(data.predictions.length, 0);
+    assert.equal(data.unrated.length, 1, "Roma and Lazio have no history in the stubbed archive");
+    assert.match(data.unrated[0].reason, /no history|no rated matches/);
+  });
+
+  it("says so plainly when nothing is in the window", async () => {
+    const data = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 1 });
+    assert.equal(data.predictions.length, 0);
+    assert.match(data.note, /none inside the next 1 days/);
+  });
+
+  it("scores predictions with RPS, Brier and log loss on known numbers", async () => {
+    const data = await call("trading_score_predictions", {
+      predictions: [{
+        date: iso(-3), league: "E0", home: "Strong", away: "Weak",
+        prob_home: 0.6, prob_draw: 0.25, prob_away: 0.15,
+      }],
+      season: "2627", sample: 5,
+    });
+    assert.equal(data.scored, 1);
+    assert.equal(data.accuracy.hits, 1, "home was both predicted and the result");
+    // cumulative: (0.6-1)^2 + (0.85-1)^2 = 0.1825, halved over the 2 boundaries.
+    close(data.probability_scores.rps, 0.09125, 1e-4, "RPS");
+    close(data.probability_scores.brier, 0.245, 1e-4, "Brier");
+    close(data.probability_scores.log_loss, 0.5108, 1e-3, "log loss");
+    assert.equal(data.sample_matches[0].score, "3-0");
+  });
+
+  it("benchmarks the model against the market and settles picks", async () => {
+    const data = await call("trading_score_predictions", {
+      predictions: [
+        {
+          date: iso(-3), league: "E0", home: "Strong", away: "Weak",
+          prob_home: 0.8, prob_draw: 0.13, prob_away: 0.07,
+          market_odds: { home: 1.30, draw: 5.00, away: 9.00 },
+          pick: { outcome: "home", odds: 1.30, stake: 10 },
+        },
+        {
+          date: iso(-2), league: "E0", home: "MidA", away: "MidB",
+          prob_home: 0.2, prob_draw: 0.3, prob_away: 0.5,
+          market_odds: { home: 2.60, draw: 3.30, away: 2.80 },
+          pick: { outcome: "away", odds: 2.80, stake: 10 },
+        },
+      ],
+      season: "2627",
+    });
+    assert.equal(data.scored, 2);
+    assert.equal(data.accuracy.hits, 1, "the Strong win was called, the draw was not");
+    assert.ok(data.benchmarks.market.rps > 0, "the market gets scored on the same matches");
+    assert.equal(typeof data.benchmarks.skill_vs_market_pct, "number");
+    assert.equal(data.picks.bets, 2);
+    assert.equal(data.picks.wins, 1);
+    // +10 * 0.30 on the winner, -10 on the loser.
+    close(data.picks.profit, -7, 0.01, "picks P&L");
+    assert.ok(data.picks.average_clv_pct !== undefined, "CLV comes from the archive's closing prices");
+    assert.ok(data.calibration.length > 0);
+    assert.ok(data.verdict.length > 0);
+  });
+
+  it("reports unplayed and unmatched predictions as pending rather than scoring them", async () => {
+    const data = await call("trading_score_predictions", {
+      predictions: [
+        { date: iso(-3), league: "E0", home: "Strong", away: "Weak", prob_home: 0.6, prob_draw: 0.25, prob_away: 0.15 },
+        { date: iso(2), league: "E0", home: "Nobody FC", away: "Ghost United", prob_home: 0.4, prob_draw: 0.3, prob_away: 0.3 },
+      ],
+      season: "2627",
+    });
+    assert.equal(data.scored, 1);
+    assert.equal(data.pending_count, 1);
+    assert.match(data.pending[0].status, /not played, or a name mismatch/);
+  });
+
+  it("the round trip works: predictions feed straight into scoring", async () => {
+    const predicted = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10 });
+    // Re-date them onto matches the archive has results for, leaving every
+    // other field exactly as the predict tool emitted it.
+    const rows = predicted.predictions.map((p, i) => ({ ...p, date: iso(i === 0 ? -3 : -2) }));
+    rows[0].home = "Strong"; rows[0].away = "Weak";
+    rows[1].home = "MidA"; rows[1].away = "MidB";
+    const scored = await call("trading_score_predictions", { predictions: rows, season: "2627" });
+    assert.equal(scored.scored, 2, "the shape predict emits is the shape score accepts");
+    assert.ok(scored.probability_scores.rps >= 0);
+  });
+});
