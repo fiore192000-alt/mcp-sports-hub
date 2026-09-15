@@ -472,3 +472,111 @@ The caveat that keeps it honest: `max` is the best price *any* book offered,
 recorded after the fact. Holding accounts at every one of them, getting on
 before the price moves, and not being limited when you keep taking the top of
 the market are the reasons this is an upper bound rather than a plan.
+
+## Pattern search: 606 combinations, and the one that survived
+
+`npm run patterns` crosses five betting sides with odds bands, Elo-difference
+bands, form filters and two price sources — 606 combinations with enough bets
+on both sides of a 2019 split. This is deliberate data mining, run with the
+controls that make it honest: each combination is scored on a period it was not
+chosen on, every ROI carries its standard error, and the count of combinations
+tried is reported next to the winners.
+
+### What the top of the training table is worth
+
+| Pattern | Training ROI | Validation ROI |
+|---|---|---|
+| favourite @max, odds 3.0-5.0 | **+28.10%** (n=329) | +3.03% ±14.43 (n=105) |
+| away @max, odds 5.0+, home weaker, out of form | +10.46% (n=506) | +1.77% ±19.87 |
+| home @max, odds 5.0+, elo close, out of form | +10.00% (n=898) | **-8.41%** ±11.10 |
+| home @max, odds 5.0+, out of form | +7.25% (n=3452) | -3.08% ±6.01 |
+| favourite @max, 2.0-3.0, home much stronger, in form | +6.41% (n=721) | -4.69% ±5.76 |
+
+A 28% return on 329 bets is what a thousand filters produce from noise. Nine of
+the top ten are at or below zero afterwards.
+
+### The six that held up are all the same idea
+
+44 of 606 were positive in both periods; six cleared two standard errors in
+validation, and every one of them is a variation on **backing a short-priced
+favourite at the best available price**:
+
+| Pattern | Validation ROI | Bets |
+|---|---|---|
+| favourite @max, odds < 1.5 | +1.76% ±0.64 | 7,857 |
+| home @max, odds < 1.5 | +1.72% ±0.72 | 6,183 |
+| home @max, odds < 1.5, home stronger by Elo | +2.03% ±0.84 | 4,336 |
+| favourite @max, odds < 1.5, home stronger | +2.02% ±0.84 | 4,372 |
+| home @max, odds < 1.5, home much stronger | +1.97% ±0.88 | 3,783 |
+| favourite @max, odds < 1.5, home much stronger | +1.98% ±0.88 | 3,818 |
+
+Reproduce through the shipped tool with `strategy: favourite`, `book: max`,
+`max_odds: 1.5`: +1.85% over 5,766 bets in the validation period.
+
+**Take the significance test with salt.** Six survivors from 606 tries is
+*fewer* than multiple testing alone would throw up — at two standard errors
+one-sided you would expect around fourteen. The reasons to look twice are not
+statistical: the survivors are one coherent family rather than scattered
+outliers, the effect is the favourite-longshot bias documented for decades, and
+it is stable year by year — positive in 18 of the 22 years, worst year -0.55%.
+
+**And the edge is entirely the price.** The same bets at the market average
+price: -1.18% in training, -1.21% in validation. Backing short favourites is
+not the strategy. Shopping for the best price on short favourites is.
+
+## About winning streaks, and compounding
+
+The longest run in the validation period was **40 consecutive wins** (home,
+best price, under 1.50). What chance alone produces at that strike rate, over
+that many bets, is **32.8**. The longest losing run was 5.
+
+| Pattern | Longest run | Expected by chance | Strike | ROI |
+|---|---|---|---|---|
+| home @max, odds < 1.5 | 40 | 32.8 | 76.6% | +1.72% |
+| favourite @max, odds < 1.5 | 35 | 33.2 | 76.3% | +1.76% |
+| home @avg, much stronger, in form | 33 | 23.9 | 70.9% | **-1.75%** |
+| home @avg, odds < 1.5 | 32 | 30.6 | 74.6% | **-1.58%** |
+
+**Long winning runs are a property of short odds, not of an edge.** The third
+and fourth rows put together streaks of 32 and 33 while losing money. If a
+system is sold on its streaks, the streaks are the strike rate talking.
+
+### What compounding actually does to a 1.7% edge
+
+Staking a fixed percentage of the bank on every bet of the surviving pattern,
+across the validation period, starting from 100:
+
+| Stake | Final bank | Max drawdown |
+|---|---|---|
+| 1% | 262 | 23.9% |
+| 2% | 558 | 42.9% |
+| 5% | **1,561** | 80.9% |
+| 10% | 114 | 99.3% |
+| 25% | **ruin** | 99.7% |
+
+The same bets at the market average price instead of the best one:
+
+| Stake | Final bank |
+|---|---|
+| 2% | 15 |
+| 5% | ruin |
+| 10% | ruin |
+
+Two things to read off this. A real edge compounds into something remarkable —
+and the same edge, staked too hard, ends in ruin: the 5% line multiplies the
+bank fifteen-fold while spending most of the period more than half underwater,
+and 10% barely breaks even after a 99% drawdown. The exponential works in both
+directions, and variance decides which.
+
+And the second: at the average price, the identical bet selection compounds
+straight to zero. The difference between fifteen-fold and ruin is not the
+picks. It is the price.
+
+### Before anyone stakes money on this
+
+`max` is the best price *any* of the tracked bookmakers offered, recorded after
+the fact. Capturing it means an account at each of them, beating the move, and
+not being restricted — and accounts that consistently take top-of-market on
+short favourites are the first ones limited. A 1.7% edge does not survive much
+friction: one missed price, one closed account, one bet at the average instead
+of the best, and the table above turns into the table below it.

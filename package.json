@@ -28,6 +28,7 @@
     "tune": "npm run build && node scripts/tune-model.mjs",
     "fetch:archive": "npm run build && node scripts/fetch-archive.mjs",
     "sweep": "npm run build && node scripts/strategy-sweep.mjs",
+    "patterns": "npm run build && node scripts/pattern-search.mjs",
     "bundle": "npm run build && npx -y @anthropic-ai/mcpb pack"
   },
   "keywords": [
