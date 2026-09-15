@@ -37,6 +37,8 @@ Predictions are appended to `predictions/<LEAGUE>-<SEASON>.json` and are never
 rewritten — a forecast you can edit after the result is not a forecast. Each
 row records when it was made and which source it came from.
 
+`review` looks at the last handful of played matches one by one: what the model said before each, what happened, and — where prices exist — how the market scored on the same match. It prints the confidence interval next to the result, because that is the whole point: on ten matches the interval is as wide as the difference between a useful model and a useless one. Use it to check the process (everything priced? data complete? prices recorded?) and to find misses worth investigating, never to judge the model.
+
 `hindcast` is the one that answers "is this any good?" before the next round:
 it re-predicts every match already played using only what was known before each
 one, then scores it. Point it at more than one season with `--seasons` and it

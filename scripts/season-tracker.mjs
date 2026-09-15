@@ -9,6 +9,7 @@
  *                                            [--supersede "why the old ones are wrong"]
  *   node scripts/season-tracker.mjs score    --leagues I1,E0
  *   node scripts/season-tracker.mjs hindcast --leagues I1,E0 [--seasons 2324,2425] [--min-history 4]
+ *   node scripts/season-tracker.mjs review   --leagues I1 [--last 10]
  *
  * Predictions are appended to predictions/<LEAGUE>-<SEASON>.json and are never
  * rewritten: a forecast you can edit after the result is not a forecast. New
@@ -242,6 +243,102 @@ async function hindcast() {
   }
 }
 
+/**
+ * Look at the last N played matches one by one: what the model said before each
+ * one, what happened, and how wrong it was.
+ *
+ * Deliberately not a verdict. Ten matches cannot tell you whether a model is
+ * good — the report prints the confidence interval so that is visible rather
+ * than assumed. What a review this short IS good for is the process: whether
+ * every fixture got priced, whether the data had holes, and which misses share
+ * a mechanism worth testing on a real sample.
+ */
+async function review() {
+  const last = Number(flag("last", 10));
+  const { loadSeasons } = await import(dist("shared/football-source.js"));
+  const { rankedProbabilityScore, scoreForecasts, devig, BASE_RATES } = await import(dist("shared/betting-math.js"));
+  const idx = (r) => (r === "H" ? 0 : r === "D" ? 1 : 2);
+  const label = ["1", "X", "2"];
+
+  for (const league of leagues) {
+    const season = flag("season", currentSeasonCode());
+    const previous = `${String((Number(season.slice(0, 2)) + 99) % 100).padStart(2, "0")}${season.slice(0, 2)}`;
+    const { played } = await loadSeasons(league, [previous, season], source);
+    const current = played.filter((m) => m.season === season);
+    const window = current.slice(-last);
+    if (window.length === 0) { console.log(`${league}: nessuna partita giocata in ${season}`); continue; }
+
+    const rows = [];
+    let unrated = 0;
+    for (const m of window) {
+      const before = played.filter((x) => x.ts < m.ts);
+      const fit = fitRatings(before.map((x) => ({ home: x.home, away: x.away, homeGoals: x.homeGoals, awayGoals: x.awayGoals, ts: x.ts })),
+        { half_life_days: 240, prior_matches: 4, as_of: m.ts });
+      const xg = expectedGoals(fit, m.home, m.away, { fallback: { attack: 0.85, defence: 1.15 } });
+      if (!xg) { unrated++; continue; }
+      const model = matchModel(xg.home, xg.away, { rho: -0.1 });
+      const p = [model.probabilities.home, model.probabilities.draw, model.probabilities.away];
+      const actual = idx(m.result);
+      const priced = ["H", "D", "A"].map((k) => m.prices.open[k]?.odds ?? m.prices.close[k]?.odds);
+      const odds = priced.every(Boolean) ? priced : undefined;
+      // Where the prices exist, score the market on the same match: it is the
+      // only benchmark that means anything, and ten matches is already enough
+      // to see whether the model is in the same postcode.
+      const marketP = odds ? devig(odds, "shin").probabilities : undefined;
+      rows.push({
+        m, p, actual, odds, marketP,
+        rps: rankedProbabilityScore(p, actual),
+        marketRps: marketP ? rankedProbabilityScore(marketP, actual) : undefined,
+      });
+    }
+
+    const s = scoreForecasts(rows.map((r) => ({ p: r.p, actual: r.actual })));
+    const base = scoreForecasts(rows.map((r) => ({ p: BASE_RATES, actual: r.actual })));
+    const sd = rows.length > 1
+      ? Math.sqrt(rows.reduce((a, r) => a + (r.rps - s.rps) ** 2, 0) / (rows.length - 1))
+      : 0;
+    const margin = 2 * sd / Math.sqrt(rows.length || 1);
+
+    console.log(`\n=== ${league} ${season} — ultime ${rows.length} giocate (${rows[0].m.date} -> ${rows[rows.length-1].m.date}) ===`);
+    const pc = (x) => `${(x * 100).toFixed(0)}%`.padStart(4);
+    for (const r of rows) {
+      const best = r.p.indexOf(Math.max(...r.p));
+      const versus = r.marketRps !== undefined
+        ? `  mercato ${pc(r.marketP[0])}/${pc(r.marketP[1])}/${pc(r.marketP[2])} RPS ${r.marketRps.toFixed(3)} ${r.rps < r.marketRps ? "(meglio noi)" : "(meglio il mercato)"}`
+        : "";
+      console.log(`${r.m.date}  ${(r.m.home + " v " + r.m.away).padEnd(40)} ${pc(r.p[0])}/${pc(r.p[1])}/${pc(r.p[2])}  ` +
+        `-> ${label[r.actual]} ${r.m.homeGoals}-${r.m.awayGoals}  RPS ${r.rps.toFixed(3)}${versus}`);
+    }
+    console.log(`\nazzeccate ${s.hits}/${s.n}  |  RPS ${s.rps.toFixed(4)} contro ${base.rps.toFixed(4)} dei tassi base`);
+    console.log(`intervallo a due sigma: ${(s.rps - margin).toFixed(3)} - ${(s.rps + margin).toFixed(3)}`);
+    console.log(`  → ${rows.length} partite non dicono se il modello sia buono: l'intervallo è largo quanto la differenza fra un modello utile e uno inutile.`);
+    if (unrated) console.log(`  ${unrated} partita/e non valutabile/i (squadra senza storico)`);
+    const withOdds = rows.filter((r) => r.odds).length;
+    const priced = rows.filter((r) => r.marketRps !== undefined);
+    if (priced.length) {
+      const ours = scoreForecasts(priced.map((r) => ({ p: r.p, actual: r.actual })));
+      const theirs = scoreForecasts(priced.map((r) => ({ p: r.marketP, actual: r.actual })));
+      const beaten = priced.filter((r) => r.rps < r.marketRps).length;
+      console.log(`  contro il mercato su ${priced.length}: noi ${ours.rps.toFixed(4)}, mercato ${theirs.rps.toFixed(4)} ` +
+        `(${((1 - ours.rps / theirs.rps) * 100).toFixed(1)}%), battuto in ${beaten}/${priced.length} partite`);
+      console.log("  \u2192 questo è il confronto che conta; su dieci partite resta rumore, ma è rumore attorno alla cosa giusta.");
+    }
+    if (withOdds < rows.length) {
+      console.log(`  quote mancanti su ${rows.length - withOdds}/${rows.length}: senza prezzi non c'è confronto col mercato, che è l'unico metro che converge in fretta`);
+    }
+
+    const worstMissed = rows.filter((r) => r.p.indexOf(Math.max(...r.p)) !== r.actual).sort((a, b) => b.rps - a.rps).slice(0, 3);
+    if (worstMissed.length) {
+      console.log("\nerrori da cui vale la pena partire (sbagliati, ordinati per gravità):");
+      for (const r of worstMissed) {
+        const best = r.p.indexOf(Math.max(...r.p));
+        console.log(`  ${r.m.date} ${r.m.home} v ${r.m.away}: dava ${label[best]} al ${(r.p[best] * 100).toFixed(0)}%, uscito ${label[r.actual]} (${r.m.homeGoals}-${r.m.awayGoals})`);
+      }
+      console.log("  cerca un meccanismo comune (espulsioni, coppe infrasettimanali, neopromosse), non un pattern: con questi numeri un pattern è rumore.");
+    }
+  }
+}
+
 function render(title, r) {
   console.log(`\n=== ${title} ===`);
   if (!r.scored) {
@@ -270,9 +367,9 @@ function currentSeasonCode() {
   return `${two(start)}${two(start + 1)}`;
 }
 
-const commands = { predict, score, hindcast };
+const commands = { predict, score, hindcast, review };
 if (!commands[command]) {
-  console.error("usage: season-tracker.mjs <predict|score|hindcast> [--leagues I1,E0] [--days 10] [--season 2627] [--source auto]");
+  console.error("usage: season-tracker.mjs <predict|score|hindcast|review> [--leagues I1,E0] [--days 10] [--last 10] [--season 2627] [--source auto]");
   process.exit(1);
 }
 await commands[command]();

@@ -580,3 +580,35 @@ not being restricted — and accounts that consistently take top-of-market on
 short favourites are the first ones limited. A 1.7% edge does not survive much
 friction: one missed price, one closed account, one bet at the average instead
 of the best, and the table above turns into the table below it.
+
+## A worked example of why short samples lie
+
+`npm run track -- review --leagues I1 --last 10`, run on the ten Serie A
+matches of 28-31 August 2026, with the real prices those matches carried:
+
+| | Model | Market |
+|---|---|---|
+| RPS over the ten | **0.1614** | 0.1784 |
+| Advantage | **+9.5% for the model** | |
+| Matches scored better | 5 of 10 | 5 of 10 |
+
+On this sample the model beats the market by 9.5%. On 8,069 matches it loses to
+it by 3%, and on 679 with closing prices by 9%. Same model, same metric,
+opposite conclusion.
+
+Where the 9.5% comes from, leaving one match out at a time:
+
+| Match removed | Advantage becomes |
+|---|---|
+| Fiorentina v Frosinone | **-4.6%** — it vanishes |
+| Napoli v Como | +6.5% |
+| Monza v Udinese | +8.3% |
+| *(any other single match)* | +9.4% to +13.0% |
+
+One match — a 0-3 the market priced at 60% for the home side — is the entire
+result. Remove it and the model is behind again.
+
+This is what a ten-match review is for: process checks, and misses worth
+investigating. It is not for deciding whether a model works, and the `review`
+command prints the two-sigma interval (0.115 to 0.208 here) so the temptation
+is at least visible.
