@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete list of all **396 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
+Complete list of all **419 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
 
 ---
 
@@ -813,3 +813,41 @@ date: formatted YYYYMMDD
 | `highlightly_get_odds` | Get pre-match/live odds aggregated from 100+ bookmakers for a sport, by match or league. | **sport**, match_id?, league_id? |
 | `highlightly_get_head_to_head` | Get head-to-head history between two teams for a sport. | **sport**, **team_id_1**, **team_id_2** |
 
+---
+
+## Lumify (`lumify_`) — 14 tools
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `lumify_get_sports` | List sports and leagues Lumify covers (MLB, NFL, NBA, NHL, NCAAF, NCAAB, tennis, soccer). Returns the sport/league slugs used by other tools. | active_only? |
+| `lumify_get_seasons` | List seasons, optionally filtered by sport. Returns season IDs usable as season_id in lumify_get_events. | sport?, current_only? |
+| `lumify_get_events` | List events (schedules, live, and completed). Filter by sport, league, status, and date range. Returns event IDs needed by the odds/score/splits/intelligence tools. | sport?, league?, status?, date?, from?, to?, season_id?, team_id?, include_scores?, has_recommend?, sort?, after_id?, limit? |
+| `lumify_get_event` | Get a single event by ID, optionally inlining current odds and AI bet intelligence. | **event_id**, include_odds?, include_intelligence?, bookmaker? |
+| `lumify_get_event_score` | Get the current or final score for an event, including period/inning breakdown where available. | **event_id** |
+| `lumify_get_event_odds` | Get current betting odds (moneyline, spread, total) for an event from the requested bookmaker. | **event_id**, bookmaker? |
+| `lumify_get_odds_history` | Get line-movement history for an event — how the odds have moved over time for the requested bookmaker. | **event_id**, bookmaker?, limit? |
+| `lumify_get_betting_splits` | Get public betting splits for an event — the share of bets and handle on each side (money vs. tickets). | **event_id** |
+| `lumify_get_bet_intelligence` | Get Lumify AI bet intelligence for an event: confidence scores, detected signals, and a natural-language narrative explaining the recommendation. | **event_id**, bookmaker? |
+| `lumify_get_teams` | List or search teams. Filter by sport, league, conference, division, or country; search by name with q. | sport?, league?, conference?, division?, country?, q?, active?, after_id?, limit? |
+| `lumify_get_team` | Get a single team by ID. | **team_id** |
+| `lumify_get_players` | List or search players. Filter by sport, country, active/ranked status; search by name with q. | sport?, q?, country?, active?, ranked?, after_id?, limit? |
+| `lumify_get_player` | Get a single player by ID. | **player_id** |
+| `lumify_get_player_events` | List a player's events (past and upcoming). Filter by status and date range. | **player_id**, status?, from?, to?, after_id?, limit? |
+
+---
+
+## Trading Toolkit (`trading_`) — 9 tools
+
+Local computation — no API key. `trading_backtest` and `trading_team_ratings` read the keyless football-data.co.uk archive; the rest work entirely on numbers you pass in.
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `trading_list_strategies` | List the backtest strategies, staking modes and price sources available in trading_backtest, with the data caveats for each. Call this before trading_backtest if unsure which strategy to run. | _(none)_ |
+| `trading_devig_odds` | Remove the bookmaker margin from a complete market and return fair probabilities and fair odds. Feed it every outcome of one market (e.g. home/draw/away). Methods: multiplicative, additive, power, shin. | **odds**, names?, method?, compare_methods? |
+| `trading_evaluate_bet` | Score one or more selections against your own probabilities: edge, expected value per unit, fractional Kelly stake and a bet/no-bet verdict. Pair it with trading_devig_odds (fair probs from a sharp book) or trading_poisson_model (probs from a goals model). | **selections**, bankroll?, kelly_fraction?, max_stake_pct?, min_edge_pct?, commission_pct? |
+| `trading_find_arbitrage` | Check whether best prices from different bookmakers make a risk-free book, and split the stake so every outcome returns the same. Give it every outcome of one market, each at the best price you can actually get. | **outcomes**, total_stake?, commission_pct? |
+| `trading_hedge_position` | Close out an open back or lay position: the stake that locks the same profit whichever way the match goes (green-up), what a partial hedge leaves you with, and what happens if you let it ride. Handles exchange commission. | **side**, **stake**, **odds**, **hedge_odds**, hedge_stake?, commission_pct? |
+| `trading_poisson_model` | Price a football match from expected goals: 1X2, over/under, both-teams-to-score and correct score, as probabilities and fair odds. Optionally compare against market odds to get the edge on every outcome. Dixon-Coles low-score correction supported via rho. | **home_xg**, **away_xg**, rho?, market_odds?, commission_pct? |
+| `trading_team_ratings` | Fit attack/defence strengths for a league from football-data.co.uk results, and optionally price a fixture with them (Poisson) and compare to market odds. Attack/defence are relative to the league venue average: 1.0 = average, 1.3 = 30% better. | **league**, **season**, extra_seasons?, half_life_days?, prior_matches?, as_of?, home?, away?, rho?, market_odds? |
+| `trading_backtest` | Backtest a football betting strategy on real historical results and bookmaker odds (football-data.co.uk, 2000-now, 20+ leagues). Returns ROI, P&L, strike rate, max drawdown, closing-line value and per-season/per-league breakdowns. Use trading_list_strategies first to pick a strategy. | **strategy**, leagues?, seasons?, phase?, book?, min_odds?, max_odds?, edge_pct?, markets?, min_history?, half_life_days?, rho?, staking?, unit?, percent?, kelly_fraction?, max_stake_pct?, bankroll?, commission_pct?, sample_bets? |
+| `trading_closing_line_value` | Measure your bets against the closing line — the single best evidence that a betting process has an edge, ahead of P&L. Give it the price you took and the closing price for each bet; outcomes are optional. | **bets**, closing_margin_pct?, commission_pct? |

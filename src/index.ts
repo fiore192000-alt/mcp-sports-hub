@@ -35,6 +35,9 @@ const PROVIDERS: Record<string, () => Promise<{ register: (s: McpServer) => void
   sleeper:        () => import("./providers/sleeper.js"),
   euroleague:     () => import("./providers/euroleague.js"),
   footballdatauk: () => import("./providers/football-data-uk.js"),
+  // Local computation over data the caller already has (plus the keyless
+  // football-data.co.uk archive for backtests) — no upstream key, no quota.
+  trading:        () => import("./providers/trading.js"),
 
   // Key required
   apisports:      () => import("./providers/api-sports.js"),
@@ -68,14 +71,14 @@ const PROVIDERS: Record<string, () => Promise<{ register: (s: McpServer) => void
 // SPORTS_HUB_PROVIDERS controls which providers to load.
 //
 //   Not set / empty    → load "free" preset (19 providers, ~165 tools)
-//   "all"              → load ALL 41 providers (396 tools)
+//   "all"              → load ALL 43 providers (419 tools)
 //   "espn,nhl,mlb"     → load only these 3 (36 tools)
 //   "-odds,-oddsio"    → load all EXCEPT these (prefix with -)
 //   "us-major,-cfbd"   → a preset minus some of its members
 //
 // Presets (defined in shared/catalog.ts):
-//   "us-major", "soccer", "f1", "motorsport", "esports", "odds", "cricket",
-//   "golf", "chess", and "free" (all 19 no-key providers — the default).
+//   "us-major", "soccer", "f1", "motorsport", "esports", "odds", "trading",
+//   "cricket", "golf", "chess", and "free" (all 20 no-key providers — the default).
 // ---------------------------------------------------------------------------
 
 function resolveProviders(): string[] {
@@ -204,12 +207,13 @@ async function main() {
   // Warn about tool bloat
   if (isAll) {
     console.error("");
-    console.error(`  ⚠ All ${Object.keys(PROVIDERS).length} providers loaded (396 tools).`);
+    console.error(`  ⚠ All ${Object.keys(PROVIDERS).length} providers loaded (419 tools).`);
     console.error("    LLMs work best with fewer tools. Consider using a preset:");
-    console.error("    SPORTS_HUB_PROVIDERS=free        → 19 providers, ~165 tools (no keys needed)");
+    console.error("    SPORTS_HUB_PROVIDERS=free        → 20 providers, 172 tools (no keys needed)");
     console.error("    SPORTS_HUB_PROVIDERS=us-major    → 9 providers, ~93 tools");
     console.error("    SPORTS_HUB_PROVIDERS=motorsport  → 5 providers, ~42 tools (no keys needed)");
-    console.error("    SPORTS_HUB_PROVIDERS=soccer      → 8 providers, ~73 tools");
+    console.error("    SPORTS_HUB_PROVIDERS=soccer      → 9 providers, 80 tools");
+    console.error("    SPORTS_HUB_PROVIDERS=trading     → 8 providers, 78 tools (odds + backtesting)");
     console.error("");
   }
 

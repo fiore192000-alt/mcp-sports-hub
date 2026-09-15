@@ -1,7 +1,7 @@
 # Sports Hub MCP Server
 
-Unified MCP server — 41 providers, 396 tools, one process.
-Covers: NFL, NBA, EuroLeague, MLB, NHL, Soccer, F1, MotoGP, Formula E, NASCAR, Tennis, Cricket, MMA, Boxing, Golf, Esports, Rugby, Volleyball, Handball, College Sports, Chess, AFL, NFL fantasy, and more.
+Unified MCP server — 43 providers, 419 tools, one process.
+Covers: NFL, NBA, EuroLeague, MLB, NHL, Soccer, F1, MotoGP, Formula E, NASCAR, Tennis, Cricket, MMA, Boxing, Golf, Esports, Rugby, Volleyball, Handball, College Sports, Chess, AFL, NFL fantasy, betting/trading maths, and more.
 Also exposes MCP **resources** (provider/preset catalogs at `sportshub://...`) and **prompts** (curated workflows like `whats-on-today`, `compare-odds`, `motorsport-weekend`).
 
 Works with any MCP client (Claude, ChatGPT, Gemini, Cursor, Windsurf, Continue, Cline, Zed).
@@ -9,7 +9,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 
 ## Provider Reference
 
-### No API key required (19 providers, ~165 tools)
+### No API key required (20 providers, 172 tools)
 
 | Prefix | Provider | Coverage | Tools |
 |--------|----------|----------|-------|
@@ -32,11 +32,12 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 | `sleeper_` | Sleeper | NFL fantasy: player search, injuries, trending, leagues, rosters | 10 |
 | `euroleague_` | EuroLeague Basketball | EuroLeague + EuroCup: games, clubs, boxscores, play-by-play | 6 |
 | `footballdata_uk_` | Football-Data.co.uk | Historical football results + bookmaker odds (CSV, 25+ leagues) | 2 |
+| `trading_` | Trading toolkit (local) | Betting maths: de-vig, EV/Kelly, arbitrage, hedging, Poisson model, historical backtest | 9 |
 
 `sportsdb_` defaults to test key "3" (free, watermarked images). Set `THESPORTSDB_API_KEY` for a personal key.
 `sportsrc_` V1 endpoints are free with no key. V2 (xG, momentum, lineups) needs `SPORTSRC_API_KEY` and is currently NOT exposed.
 
-### API key required (22 providers, ~231 tools)
+### API key required (23 providers, 247 tools)
 
 | Prefix | Provider | Env var | Coverage | Tools | Free limit |
 |--------|----------|---------|----------|-------|------------|
@@ -52,6 +53,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 | `odds_` | The Odds API | `THE_ODDS_API_KEY` | Odds 70+ sports, 40+ bookmakers | 9 | 500/mo |
 | `oddsio_` | Odds-API.io | `ODDS_API_IO_KEY` | Odds 34 sports, 265+ bookmakers | 10 | Free account |
 | `sgo_` | Sports Game Odds | `SPORTS_GAME_ODDS_KEY` | Odds 55+ leagues, player props | 10 | Trial |
+| `lumify_` | Lumify | `LUMIFY_API_KEY` | Odds, line movement, betting splits, AI bet analysis (8 sports) | 14 | Free trial |
 | `mma_` | Fighting Tomatoes | `FIGHTING_TOMATOES_API_KEY` | MMA fight history | 8 | 200/mo |
 | `livegolf_` | Live Golf API | `LIVE_GOLF_API_KEY` | Golf PGA, DP World Tour | 8 | Free tier |
 | `isports_` | iSportsAPI | `ISPORTSAPI_KEY` | Football + Basketball (Asia-Pacific) | 10 | Free tier |
@@ -74,6 +76,8 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 **Motorsport (beyond F1)**: `motogp_get_standings`, `formulae_get_driver_standings`, `nascar_get_schedule`, `nascar_get_live`
 **Betting odds (live)**: `odds_get_odds`, `oddsio_get_odds`, `sgo_get_odds`, `highlightly_get_odds`
 **Betting odds (historical, for backtesting)**: `footballdata_uk_get_matches` (results + closing odds, 2000-now)
+**Building a football trade**: `trading_devig_odds` (fair price from a market), `trading_poisson_model` / `trading_team_ratings` (own probabilities), `trading_evaluate_bet` (edge + Kelly stake), `trading_find_arbitrage`, `trading_hedge_position` (green-up / cash-out)
+**Testing a betting strategy**: `trading_backtest` (ROI, drawdown, CLV over 25 years of results + odds), `trading_list_strategies`, `trading_closing_line_value`
 **Basketball (beyond NBA)**: `euroleague_get_games`, `euroleague_get_game_boxscore` (EuroLeague + EuroCup), `bdl_get_*` (NBA)
 **Boxing**: `boxing_get_fighters`, `boxing_get_bouts`, `boxing_get_events` (distinct from MMA)
 **Video highlights**: `highlightly_get_highlights` (multi-sport clips)
@@ -109,6 +113,7 @@ Providers without published limits (ESPN, NHL, MLB, F1, OpenF1, OpenLigaDB, Golf
 - **OpenDota** (`opendota_`): Keyless free tier ~60 req/min, 50k/mo. `opendota_search_players` is a slow DB query (20-30s).
 - **EuroLeague** (`euroleague_`): Keyless official feeds (JSON). Use competition `E` (EuroLeague) or `U` (EuroCup) + season start year. v1 XML feeds are not wrapped (JSON-only).
 - **Football-Data.co.uk** (`footballdata_uk_`): CSV parsed to JSON; historical (updated within days of each round), not live. Cryptic column codes — see https://www.football-data.co.uk/notes.txt.
+- **Trading** (`trading_`): Local computation, no API key and no quota — but `trading_backtest` and `trading_team_ratings` read the football-data.co.uk archive (one CSV per league-season, capped at 20 files per call). A backtest assumes you got the listed price on every qualifying match; treat a profitable run as a hypothesis to confirm out-of-sample, not a signal. Closing-odds columns only exist from season 2019/20 onward — earlier seasons fall back to the single published price and the result says so.
 - **Boxing** (`boxing_`): Via RapidAPI; free Basic plan is only **100 requests/month** — use sparingly.
 - **Highlightly** (`highlightly_`): Free Basic = 100 req/day. `sport` is part of the path (e.g. "football" = soccer). Standings need leagueId + season.
 - **TheSportsDB** (`sportsdb_`): Test key "3" = watermarked images. $1/mo Patreon for clean images.
@@ -119,8 +124,8 @@ Providers without published limits (ESPN, NHL, MLB, F1, OpenF1, OpenLigaDB, Golf
 
 ## Provider Filtering
 
-By default, only the `free` preset is loaded (19 providers, ~165 tools — no API keys needed).
-Set `SPORTS_HUB_PROVIDERS=all` for all 41 providers (396 tools), but that many tools can overwhelm LLMs.
+By default, only the `free` preset is loaded (20 providers, 172 tools — no API keys needed).
+Set `SPORTS_HUB_PROVIDERS=all` for all 43 providers (419 tools), but that many tools can overwhelm LLMs.
 Use `SPORTS_HUB_PROVIDERS` to control which providers are active.
 
 ### Presets (recommended)
@@ -128,23 +133,24 @@ Use `SPORTS_HUB_PROVIDERS` to control which providers are active.
 | Preset | Providers loaded | Use case |
 |--------|-----------------|----------|
 | `us-major` | espn, nhl, mlb, ncaa, cfbd, bdl, msf, nascar, sleeper | US sports fans |
-| `soccer` | espn, apifootball, footballdata, sportmonks, openliga, sportsrc, footballdatauk, highlightly | Football/soccer |
+| `soccer` | espn, apifootball, footballdata, sportmonks, openliga, sportsrc, footballdatauk, highlightly, trading | Football/soccer |
 | `f1` | f1, openf1 | Formula 1 |
 | `motorsport` | f1, openf1, motogp, formulae, nascar | F1, MotoGP, Formula E, NASCAR |
 | `esports` | pandascore, opendota | LoL, CS2, Dota 2 (+ deep Dota analytics)... |
-| `odds` | odds, oddsio, sgo | Betting odds |
+| `odds` | odds, oddsio, sgo, lumify, trading | Betting odds + the maths to use them |
 | `cricket` | cricket, entitycricket | Cricket |
 | `golf` | livegolf, golfcourse | Golf |
+| `trading` | trading, footballdatauk, odds, oddsio, sgo, lumify, apifootball, footballdata | Betting/trading: price, backtest, stake |
 | `chess` | lichess, chesscom | Chess (Lichess + Chess.com) |
-| `free` | espn, nhl, mlb, f1, openf1, openliga, sportsdb, ncaa, sportsrc, lichess, chesscom, squiggle, motogp, formulae, nascar, opendota, sleeper, euroleague, footballdatauk | All no-key providers (19) |
+| `free` | espn, nhl, mlb, f1, openf1, openliga, sportsdb, ncaa, sportsrc, lichess, chesscom, squiggle, motogp, formulae, nascar, opendota, sleeper, euroleague, footballdatauk, trading | All no-key providers (20) |
 
 ### Usage
 
 ```bash
-# Default — free preset, 19 no-key providers, ~165 tools
+# Default — free preset, 20 no-key providers, 172 tools
 node dist/index.js
 
-# All 41 providers (396 tools)
+# All 43 providers (419 tools)
 SPORTS_HUB_PROVIDERS=all node dist/index.js
 
 # Preset — recommended for most users
@@ -179,9 +185,9 @@ In Claude Desktop config:
 ### Why filter?
 
 LLMs work best with fewer, focused tools. Recommendations:
-- **General use**: `free` preset (19 providers, ~165 tools)
+- **General use**: `free` preset (20 providers, 172 tools)
 - **Specific sport**: use the sport preset (`f1`, `soccer`, `esports`, etc.)
-- **Full access**: `SPORTS_HUB_PROVIDERS=all` (396 tools — works but slower tool selection)
+- **Full access**: `SPORTS_HUB_PROVIDERS=all` (419 tools — works but slower tool selection)
 
 ## Transport
 
@@ -219,8 +225,10 @@ Set env vars for providers you need. Missing keys don't block startup.
 ## Project Structure
 
 ```
-src/index.ts           → Lazy-imports, provider filtering, stdio/HTTP transport
-src/shared/http.ts     → fetchJson() with TTL cache, buildUrl(), toolResult(), errorResult()
-src/providers/*.ts     → One file per API, exports register(server)
-src/tests/smoke.test.mjs → 118 smoke tests (run: npm test)
+src/index.ts                 → Lazy-imports, provider filtering, stdio/HTTP transport
+src/shared/http.ts           → fetchJson() with TTL cache, buildUrl(), toolResult(), errorResult()
+src/shared/betting-math.ts   → Pure betting maths: de-vig, EV/Kelly, arbitrage, hedging, Poisson, team ratings
+src/shared/football-csv.ts   → football-data.co.uk archive: CSV parsing + odds-column resolution
+src/providers/*.ts           → One file per API, exports register(server)
+src/tests/*.test.mjs         → Offline test suite, incl. the trading maths and backtest engine (run: npm test)
 ```

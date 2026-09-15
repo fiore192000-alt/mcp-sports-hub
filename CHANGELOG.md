@@ -4,7 +4,25 @@ All notable changes to this project are documented here. This project follows [s
 
 ## [Unreleased]
 
-Context cost and multi-client correctness. No provider or tool was added, removed or renamed.
+Context cost, multi-client correctness, and a football trading toolkit.
+
+### Added — `trading_` provider (9 tools, no API key)
+
+Turns prices into positions, and lets you test the idea on history before staking anything:
+
+- `trading_backtest` — run a strategy over real results + bookmaker odds (football-data.co.uk, 2000-now, 20+ leagues) and get ROI, strike rate, max drawdown, closing-line value and per-season/per-league breakdowns. Strategies: flat sides (`home`/`draw`/`away`/`favourite`/`underdog`/`over25`/`under25`), `value_model` (walk-forward Poisson ratings, no lookahead) and `clv_steam` (opening price vs the de-vigged close). Flat, percent-of-bank or fractional Kelly staking.
+- `trading_team_ratings` — attack/defence strengths fitted from a league's results, with optional recency decay, shrinkage and fixture pricing.
+- `trading_poisson_model` — 1X2, over/under, BTTS and correct score from expected goals, with an optional Dixon-Coles low-score correction.
+- `trading_devig_odds` — margin removal (multiplicative, additive, power, shin).
+- `trading_evaluate_bet` — edge, EV and fractional Kelly stake for one or more selections.
+- `trading_find_arbitrage` — risk-free books and the stake split that equalises the return.
+- `trading_hedge_position` — green-up/cash-out stake and P&L for an open back or lay, with exchange commission.
+- `trading_closing_line_value` — measure bets you actually made against the close.
+- `trading_list_strategies` — the strategy/staking/price-source reference, with the data caveats.
+
+Every backtest result ships with its caveats (assumed fills, sample size, the risk of tuning on the same data). New `trading` preset; the provider also joins `free`, `soccer` and `odds`. New prompts: `build-football-trade`, `backtest-football-strategy`.
+
+Totals: **43 providers / 419 tools** (up from 42 / 410). `footballdata_uk_` now shares the CSV loader with the new provider — same tools, same behaviour.
 
 ### Fixed
 - **HTTP mode served only one client.** A single `StreamableHTTPServerTransport` was shared by every request, so the second client to `initialize` got `400 Invalid Request: Server already initialized`. This affected the Smithery-hosted endpoint, which is HTTP by definition. Each client now gets its own session (or set `SPORTS_HUB_STATELESS=1` for a throwaway server per request).
@@ -19,7 +37,7 @@ Context cost and multi-client correctness. No provider or tool was added, remove
 - **In-flight coalescing.** Concurrent identical requests share one upstream call.
 - **Negative caching** of `404`/`410` for 30s, so a wrong ID is not re-fetched in a loop.
 - **Server instructions** describing `fields` once at connect time rather than on 396 tool schemas.
-- 22 tests covering projection, slimming, capping, retries, coalescing and cache isolation (192 total).
+- 22 tests covering projection, slimming, capping, retries, coalescing and cache isolation, plus 46 for the trading maths, the archive's odds columns and the backtest engine (246 total).
 
 ### Changed
 - Tool results are serialized compactly. The previous `JSON.stringify(data, null, 2)` spent 56% of the bytes on indentation no model reads.

@@ -1,0 +1,561 @@
+/**
+ * Pure betting/trading math — no network, no state, no provider coupling.
+ *
+ * Everything the `trading_` tools compute lives here so it can be unit-tested
+ * without a server or an HTTP mock: margin removal, expected value, Kelly,
+ * arbitrage stakes, back/lay hedging, Poisson match models and the team
+ * strength fit that drives the walk-forward backtest.
+ *
+ * Convention: odds are DECIMAL (European) everywhere, probabilities are
+ * fractions in [0,1], commission is a fraction of NET winnings (exchange
+ * style, 0 for a bookmaker).
+ */
+
+export type DevigMethod = "multiplicative" | "additive" | "power" | "shin";
+
+export function round(n: number, dp: number): number {
+  const f = 10 ** dp;
+  return Math.round(n * f) / f;
+}
+
+/** Fraction -> percentage, 3dp. Keeps payloads small and readable. */
+export function asPct(fraction: number): number {
+  return round(fraction * 100, 3);
+}
+
+/** Decimal odds rounded for output. */
+export function asOdds(odds: number): number {
+  return round(odds, 4);
+}
+
+/** Probability rounded for output. */
+export function asProb(p: number): number {
+  return round(p, 6);
+}
+
+/** Decimal odds after exchange commission on net winnings. */
+export function netOdds(odds: number, commission = 0): number {
+  return 1 + (odds - 1) * (1 - commission);
+}
+
+function assertOdds(odds: number[]): void {
+  if (odds.length < 2) throw new Error("At least 2 outcomes are required");
+  for (const o of odds) {
+    if (!Number.isFinite(o) || o <= 1) throw new Error(`Invalid decimal odds: ${o} (must be > 1.0)`);
+  }
+}
+
+/** Solve f(x)=0 on [lo,hi] by bisection. f must change sign across the bracket. */
+function bisect(f: (x: number) => number, lo: number, hi: number, iterations = 100): number {
+  let a = lo, b = hi, fa = f(a);
+  for (let i = 0; i < iterations; i++) {
+    const mid = (a + b) / 2;
+    const fm = f(mid);
+    if (fm === 0) return mid;
+    if (fa * fm < 0) b = mid;
+    else { a = mid; fa = fm; }
+  }
+  return (a + b) / 2;
+}
+
+export interface DevigResult {
+  method: DevigMethod;
+  /** Sum of implied probabilities, e.g. 1.052. */
+  booksum: number;
+  /** Bookmaker margin as a percentage of the fair book. */
+  overround_pct: number;
+  probabilities: number[];
+  fair_odds: number[];
+  /** Shin's insider-trading fraction (shin only). */
+  z?: number;
+  /** Power exponent (power only). */
+  k?: number;
+  note?: string;
+}
+
+/**
+ * Strip the bookmaker margin from a complete market and return fair
+ * probabilities. The method matters: multiplicative flatters longshots,
+ * power and shin push probability back toward favourites (closer to how a
+ * sharp book actually prices), additive is the crudest.
+ */
+export function devig(odds: number[], method: DevigMethod = "multiplicative"): DevigResult {
+  assertOdds(odds);
+  const q = odds.map((o) => 1 / o);
+  const booksum = q.reduce((a, b) => a + b, 0);
+  let probabilities: number[];
+  let z: number | undefined;
+  let k: number | undefined;
+  let note: string | undefined;
+
+  if (method === "additive") {
+    const excess = (booksum - 1) / q.length;
+    probabilities = q.map((p) => p - excess);
+    if (probabilities.some((p) => p <= 0)) {
+      probabilities = q.map((p) => p / booksum);
+      note = "additive de-vig produced a non-positive probability; fell back to multiplicative";
+    }
+  } else if (method === "power") {
+    if (booksum <= 1) {
+      probabilities = q.map((p) => p / booksum);
+      note = "book has no margin (booksum <= 1); power fit skipped";
+    } else {
+      k = bisect((x) => q.reduce((a, p) => a + p ** x, 0) - 1, 1, 20);
+      probabilities = q.map((p) => p ** (k as number));
+    }
+  } else if (method === "shin") {
+    if (booksum <= 1) {
+      probabilities = q.map((p) => p / booksum);
+      note = "book has no margin (booksum <= 1); shin fit skipped";
+    } else {
+      const shinProbs = (zz: number) =>
+        q.map((p) => (Math.sqrt(zz * zz + 4 * (1 - zz) * ((p * p) / booksum)) - zz) / (2 * (1 - zz)));
+      z = bisect((zz) => shinProbs(zz).reduce((a, b) => a + b, 0) - 1, 0, 0.95);
+      probabilities = shinProbs(z);
+    }
+  } else {
+    probabilities = q.map((p) => p / booksum);
+  }
+
+  // Guard against drift from the numeric solvers.
+  const total = probabilities.reduce((a, b) => a + b, 0);
+  probabilities = probabilities.map((p) => p / total);
+
+  return {
+    method,
+    booksum: round(booksum, 6),
+    overround_pct: asPct(booksum - 1),
+    probabilities: probabilities.map(asProb),
+    fair_odds: probabilities.map((p) => asOdds(1 / p)),
+    ...(z !== undefined ? { z: round(z, 6) } : {}),
+    ...(k !== undefined ? { k: round(k, 6) } : {}),
+    ...(note ? { note } : {}),
+  };
+}
+
+/**
+ * Kelly fraction of bankroll for a back bet. Negative means no bet — the
+ * price is worse than your estimate, and the only Kelly-optimal action is
+ * to lay it (or pass).
+ */
+export function kelly(odds: number, probability: number, commission = 0): number {
+  const b = netOdds(odds, commission) - 1;
+  if (b <= 0) return 0;
+  return (probability * b - (1 - probability)) / b;
+}
+
+export interface SelectionInput {
+  name: string;
+  odds: number;
+  probability: number;
+}
+
+export interface SelectionAssessment {
+  name: string;
+  odds: number;
+  effective_odds: number;
+  model_probability: number;
+  implied_probability: number;
+  fair_odds: number;
+  /** probability * effective_odds; > 1 means positive expectation. */
+  value_ratio: number;
+  edge_pct: number;
+  ev_per_unit: number;
+  kelly_pct: number;
+  stake: number;
+  bet: boolean;
+}
+
+export interface StakeOptions {
+  bankroll?: number;
+  kelly_fraction?: number;
+  commission?: number;
+  max_stake_pct?: number;
+  min_edge_pct?: number;
+}
+
+/**
+ * Score one or more selections against your own probabilities: edge, EV and
+ * a (fractional) Kelly stake. `bet` is true only when the edge clears
+ * min_edge_pct — an edge inside the noise of your model is not a trade.
+ */
+export function assessSelections(
+  selections: SelectionInput[],
+  opts: StakeOptions = {},
+): { assessments: SelectionAssessment[]; best: SelectionAssessment | null; total_stake: number } {
+  const bankroll = opts.bankroll ?? 100;
+  const fraction = opts.kelly_fraction ?? 0.25;
+  const commission = opts.commission ?? 0;
+  const maxStakePct = opts.max_stake_pct ?? 5;
+  const minEdgePct = opts.min_edge_pct ?? 0;
+
+  const assessments = selections.map((s) => {
+    if (!Number.isFinite(s.odds) || s.odds <= 1) throw new Error(`Invalid decimal odds for "${s.name}": ${s.odds}`);
+    if (!(s.probability > 0 && s.probability < 1)) throw new Error(`Probability for "${s.name}" must be between 0 and 1`);
+    const eff = netOdds(s.odds, commission);
+    const ev = s.probability * (eff - 1) - (1 - s.probability);
+    const kellyFull = kelly(s.odds, s.probability, commission);
+    const bet = ev > 0 && asPct(ev) >= minEdgePct;
+    const stakePct = Math.max(0, Math.min(kellyFull * fraction, maxStakePct / 100));
+    return {
+      name: s.name,
+      odds: asOdds(s.odds),
+      effective_odds: asOdds(eff),
+      model_probability: asProb(s.probability),
+      implied_probability: asProb(1 / s.odds),
+      fair_odds: asOdds(1 / s.probability),
+      value_ratio: round(s.probability * eff, 4),
+      edge_pct: asPct(ev),
+      ev_per_unit: round(ev, 4),
+      kelly_pct: asPct(kellyFull),
+      stake: bet ? round(bankroll * stakePct, 2) : 0,
+      bet,
+    };
+  });
+
+  const betting = assessments.filter((a) => a.bet);
+  const best = betting.length
+    ? betting.reduce((a, b) => (b.edge_pct > a.edge_pct ? b : a))
+    : null;
+  return {
+    assessments,
+    best,
+    total_stake: round(betting.reduce((a, b) => a + b.stake, 0), 2),
+  };
+}
+
+export interface ArbitrageLeg {
+  name: string;
+  odds: number;
+  bookmaker?: string;
+}
+
+/**
+ * Check a set of best prices for a risk-free book and split the stake so every
+ * outcome returns the same amount.
+ */
+export function arbitrage(legs: ArbitrageLeg[], totalStake = 100, commission = 0) {
+  assertOdds(legs.map((l) => l.odds));
+  const eff = legs.map((l) => netOdds(l.odds, commission));
+  const booksum = eff.reduce((a, o) => a + 1 / o, 0);
+  const guaranteedReturn = totalStake / booksum;
+  const allocation = legs.map((l, i) => ({
+    name: l.name,
+    ...(l.bookmaker ? { bookmaker: l.bookmaker } : {}),
+    odds: asOdds(l.odds),
+    effective_odds: asOdds(eff[i]),
+    stake: round(totalStake / booksum / eff[i], 2),
+    returns: round(guaranteedReturn, 2),
+  }));
+  const profit = guaranteedReturn - totalStake;
+  return {
+    is_arbitrage: booksum < 1,
+    booksum: round(booksum, 6),
+    margin_pct: asPct(booksum - 1),
+    profit_pct: asPct(1 / booksum - 1),
+    total_stake: round(totalStake, 2),
+    guaranteed_return: round(guaranteedReturn, 2),
+    profit: round(profit, 2),
+    allocation,
+  };
+}
+
+export interface HedgeInput {
+  /** "back" = you already backed and want to lay off; "lay" = the reverse. */
+  side: "back" | "lay";
+  stake: number;
+  odds: number;
+  /** Price now available on the opposite side. */
+  hedge_odds: number;
+  commission?: number;
+  /** Hedge less (or more) than the full green-up amount. */
+  hedge_stake?: number;
+}
+
+/**
+ * Close out an open position. Returns the stake that equalises P&L across
+ * both results (the "green-up"), plus what happens if you let it ride or
+ * only hedge part of it.
+ */
+export function hedge(input: HedgeInput) {
+  const { side, stake, odds, hedge_odds } = input;
+  const c = input.commission ?? 0;
+  if (!Number.isFinite(odds) || odds <= 1) throw new Error(`Invalid decimal odds: ${odds}`);
+  if (!Number.isFinite(hedge_odds) || hedge_odds <= 1) throw new Error(`Invalid hedge odds: ${hedge_odds}`);
+  if (!(stake > 0)) throw new Error("stake must be positive");
+
+  // P&L of the open position if the selection wins / loses. Commission is
+  // charged on the exchange leg only — the common case is a bookmaker bet
+  // hedged on an exchange, or an exchange lay hedged at a bookmaker.
+  const openWin = side === "back" ? stake * (odds - 1) : -stake * (odds - 1);
+  const openLose = side === "back" ? -stake : stake * (1 - c);
+
+  // Full green-up stake on the opposite side.
+  const fullHedge = side === "back"
+    ? (stake * odds) / (hedge_odds - c)
+    : (stake * (odds - c)) / hedge_odds;
+  const used = input.hedge_stake ?? fullHedge;
+
+  // P&L contributed by the hedge leg.
+  const hedgeWin = side === "back" ? -used * (hedge_odds - 1) : used * (hedge_odds - 1);
+  const hedgeLose = side === "back" ? used * (1 - c) : -used;
+
+  const ifWin = openWin + hedgeWin;
+  const ifLose = openLose + hedgeLose;
+
+  return {
+    position: `${side} ${round(stake, 2)} @ ${asOdds(odds)}`,
+    commission_pct: asPct(c),
+    unhedged: { profit_if_win: round(openWin, 2), profit_if_lose: round(openLose, 2) },
+    green_up: {
+      hedge_side: side === "back" ? "lay" : "back",
+      hedge_odds: asOdds(hedge_odds),
+      stake: round(fullHedge, 2),
+      liability: side === "back" ? round(fullHedge * (hedge_odds - 1), 2) : round(fullHedge, 2),
+      locked_profit: round(
+        side === "back" ? fullHedge * (1 - c) - stake : stake * (1 - c) - fullHedge,
+        2,
+      ),
+    },
+    applied: {
+      stake: round(used, 2),
+      profit_if_win: round(ifWin, 2),
+      profit_if_lose: round(ifLose, 2),
+      worst_case: round(Math.min(ifWin, ifLose), 2),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Poisson match model
+// ---------------------------------------------------------------------------
+
+function poissonPmf(k: number, lambda: number): number {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  let logP = -lambda + k * Math.log(lambda);
+  for (let i = 2; i <= k; i++) logP -= Math.log(i);
+  return Math.exp(logP);
+}
+
+/**
+ * Dixon-Coles low-score correction. rho < 0 lifts 0-0/1-1 and trims 1-0/0-1,
+ * which is what real football scorelines do versus independent Poisson.
+ */
+function dcTau(x: number, y: number, lh: number, la: number, rho: number): number {
+  if (rho === 0) return 1;
+  if (x === 0 && y === 0) return 1 - lh * la * rho;
+  if (x === 0 && y === 1) return 1 + lh * rho;
+  if (x === 1 && y === 0) return 1 + la * rho;
+  if (x === 1 && y === 1) return 1 - rho;
+  return 1;
+}
+
+export interface MatchModelOptions {
+  rho?: number;
+  max_goals?: number;
+  lines?: number[];
+}
+
+export interface MatchModel {
+  expected_goals: { home: number; away: number; total: number };
+  probabilities: {
+    home: number; draw: number; away: number;
+    btts_yes: number; btts_no: number;
+    over: Record<string, number>;
+    under: Record<string, number>;
+  };
+  fair_odds: Record<string, number>;
+  top_scorelines: Array<{ score: string; probability: number; fair_odds: number }>;
+}
+
+/** Full 1X2 / O-U / BTTS / correct-score market from two expected-goal rates. */
+export function matchModel(lambdaHome: number, lambdaAway: number, opts: MatchModelOptions = {}): MatchModel {
+  if (!(lambdaHome > 0) || !(lambdaAway > 0)) throw new Error("Expected goals must be positive");
+  const rho = opts.rho ?? 0;
+  const maxGoals = opts.max_goals ?? 12;
+  const lines = opts.lines ?? [1.5, 2.5, 3.5];
+
+  const grid: number[][] = [];
+  let total = 0;
+  for (let h = 0; h <= maxGoals; h++) {
+    grid[h] = [];
+    for (let a = 0; a <= maxGoals; a++) {
+      const p = poissonPmf(h, lambdaHome) * poissonPmf(a, lambdaAway) * dcTau(h, a, lambdaHome, lambdaAway, rho);
+      grid[h][a] = Math.max(0, p);
+      total += grid[h][a];
+    }
+  }
+
+  let home = 0, draw = 0, away = 0, bttsYes = 0;
+  const overs = new Map<number, number>(lines.map((l) => [l, 0]));
+  const scores: Array<{ score: string; probability: number }> = [];
+  for (let h = 0; h <= maxGoals; h++) {
+    for (let a = 0; a <= maxGoals; a++) {
+      const p = grid[h][a] / total;
+      if (h > a) home += p; else if (h === a) draw += p; else away += p;
+      if (h > 0 && a > 0) bttsYes += p;
+      for (const line of lines) if (h + a > line) overs.set(line, (overs.get(line) as number) + p);
+      scores.push({ score: `${h}-${a}`, probability: p });
+    }
+  }
+
+  const over: Record<string, number> = {};
+  const under: Record<string, number> = {};
+  const fair: Record<string, number> = {
+    home: asOdds(1 / home), draw: asOdds(1 / draw), away: asOdds(1 / away),
+    btts_yes: asOdds(1 / bttsYes), btts_no: asOdds(1 / (1 - bttsYes)),
+  };
+  for (const line of lines) {
+    const o = overs.get(line) as number;
+    over[String(line)] = asProb(o);
+    under[String(line)] = asProb(1 - o);
+    fair[`over_${line}`] = asOdds(1 / o);
+    fair[`under_${line}`] = asOdds(1 / (1 - o));
+  }
+
+  return {
+    expected_goals: {
+      home: round(lambdaHome, 3),
+      away: round(lambdaAway, 3),
+      total: round(lambdaHome + lambdaAway, 3),
+    },
+    probabilities: {
+      home: asProb(home), draw: asProb(draw), away: asProb(away),
+      btts_yes: asProb(bttsYes), btts_no: asProb(1 - bttsYes),
+      over, under,
+    },
+    fair_odds: fair,
+    top_scorelines: scores
+      .sort((a, b) => b.probability - a.probability)
+      .slice(0, 6)
+      .map((s) => ({ score: s.score, probability: asProb(s.probability), fair_odds: asOdds(1 / s.probability) })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Team strength fit (the model behind the value backtest)
+// ---------------------------------------------------------------------------
+
+export interface RatedMatch {
+  home: string;
+  away: string;
+  homeGoals: number;
+  awayGoals: number;
+  /** Epoch ms — used for recency weighting only. */
+  ts: number;
+}
+
+export interface TeamRating {
+  team: string;
+  matches: number;
+  weight: number;
+  attack: number;
+  defence: number;
+  goals_for_pg: number;
+  goals_against_pg: number;
+}
+
+export interface RatingsFit {
+  matches_used: number;
+  home_goal_avg: number;
+  away_goal_avg: number;
+  home_advantage: number;
+  half_life_days: number | null;
+  prior_matches: number;
+  teams: Map<string, TeamRating>;
+}
+
+export interface FitOptions {
+  /** Exponential recency decay. null/0 = every match weighs the same. */
+  half_life_days?: number | null;
+  /** Shrinkage toward league average, in "matches" of prior weight. */
+  prior_matches?: number;
+  /** Reference time for the decay; defaults to the latest match in the sample. */
+  as_of?: number;
+}
+
+/**
+ * Attack/defence strengths, each relative to the league's venue average
+ * (1.0 = exactly average). Shrunk toward 1.0 so a team with three games does
+ * not get a 2.4 attack rating off one 4-0 win.
+ */
+export function fitRatings(matches: RatedMatch[], opts: FitOptions = {}): RatingsFit {
+  const halfLife = opts.half_life_days ?? null;
+  const prior = opts.prior_matches ?? 4;
+  if (matches.length === 0) {
+    return {
+      matches_used: 0, home_goal_avg: 0, away_goal_avg: 0, home_advantage: 0,
+      half_life_days: halfLife, prior_matches: prior, teams: new Map(),
+    };
+  }
+  const asOf = opts.as_of ?? Math.max(...matches.map((m) => m.ts));
+  const weightOf = (m: RatedMatch) => {
+    if (!halfLife || halfLife <= 0) return 1;
+    const ageDays = Math.max(0, (asOf - m.ts) / 86_400_000);
+    return 0.5 ** (ageDays / halfLife);
+  };
+
+  let wSum = 0, homeGoals = 0, awayGoals = 0;
+  for (const m of matches) {
+    const w = weightOf(m);
+    wSum += w;
+    homeGoals += w * m.homeGoals;
+    awayGoals += w * m.awayGoals;
+  }
+  const homeAvg = homeGoals / wSum;
+  const awayAvg = awayGoals / wSum;
+
+  interface Acc { w: number; n: number; gf: number; ga: number; expGf: number; expGa: number }
+  const acc = new Map<string, Acc>();
+  const touch = (team: string): Acc => {
+    let a = acc.get(team);
+    if (!a) { a = { w: 0, n: 0, gf: 0, ga: 0, expGf: 0, expGa: 0 }; acc.set(team, a); }
+    return a;
+  };
+
+  for (const m of matches) {
+    const w = weightOf(m);
+    const h = touch(m.home), a = touch(m.away);
+    h.w += w; h.n += 1; h.gf += w * m.homeGoals; h.ga += w * m.awayGoals;
+    h.expGf += w * homeAvg; h.expGa += w * awayAvg;
+    a.w += w; a.n += 1; a.gf += w * m.awayGoals; a.ga += w * m.homeGoals;
+    a.expGf += w * awayAvg; a.expGa += w * homeAvg;
+  }
+
+  const teams = new Map<string, TeamRating>();
+  for (const [team, t] of acc) {
+    const rawAttack = t.expGf > 0 ? t.gf / t.expGf : 1;
+    const rawDefence = t.expGa > 0 ? t.ga / t.expGa : 1;
+    const shrink = (raw: number) => (raw * t.w + prior) / (t.w + prior);
+    teams.set(team, {
+      team,
+      matches: t.n,
+      weight: round(t.w, 3),
+      attack: round(shrink(rawAttack), 4),
+      defence: round(shrink(rawDefence), 4),
+      goals_for_pg: round(t.n ? t.gf / t.w : 0, 3),
+      goals_against_pg: round(t.n ? t.ga / t.w : 0, 3),
+    });
+  }
+
+  return {
+    matches_used: matches.length,
+    home_goal_avg: round(homeAvg, 4),
+    away_goal_avg: round(awayAvg, 4),
+    home_advantage: round(awayAvg > 0 ? homeAvg / awayAvg : 0, 4),
+    half_life_days: halfLife,
+    prior_matches: prior,
+    teams,
+  };
+}
+
+/** Expected goals for a fixture under a fitted ratings set. */
+export function expectedGoals(fit: RatingsFit, home: string, away: string): { home: number; away: number } | null {
+  const h = fit.teams.get(home);
+  const a = fit.teams.get(away);
+  if (!h || !a) return null;
+  return {
+    home: h.attack * a.defence * fit.home_goal_avg,
+    away: a.attack * h.defence * fit.away_goal_avg,
+  };
+}
