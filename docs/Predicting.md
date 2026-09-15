@@ -22,6 +22,7 @@ Both sources have gaps, and the tools report them rather than assuming:
 
 - **Missing results.** A match whose date has passed with no result recorded is a hole, not lag. `trading_predict_fixtures` returns those under `data_quality`, and `trading_score_predictions` tells a prediction that is *still to come* apart from one the source *will never settle*.
 - **Two score shapes.** openfootball writes most matches as `{"ft":[h,a],"ht":[…]}` but some as a bare `[h,a]`. In Serie A 2025-26 the bare form is used for all 36 goalless matches — reading only `.ft` silently dropped every 0-0 of the season, which biased ratings against goalless football and showed up as a model that under-predicted draws. Both shapes are read now, and a regression test lives on the real file.
+- **The model loses to the market.** Measured on 679 Premier League matches with real prices: RPS 0.204 against the closing line's 0.187, and betting its disagreements lost 13-27% of turnover. Picks are off by default for that reason ([Evaluation](Evaluation.md)).
 - **Check before you trust.** `npm run verify:sources` fetches each source, validates the shape the code parses, reports holes, and cross-checks a finished season against an independent mirror (`datasets/football-datasets`). FAIL means real drift; SKIP means the host was unreachable from where you ran it.
 
 ## From a shell, without an MCP client

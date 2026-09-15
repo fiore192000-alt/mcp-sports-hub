@@ -286,3 +286,91 @@ In the order the evidence supports:
    needs a source this repo cannot currently reach.
 3. **Team news.** Lineups, injuries and suspensions published an hour before
    kick-off are most of what moves a market between opening and closing.
+
+## Against a bookmaker, at last
+
+Everything above measures the model against base rates, because the source
+carrying odds was unreachable. With two complete Premier League seasons dropped
+into `data/football-data/` (2021-22 and 2023-24, 679 matches with both opening
+and closing prices), the comparison that matters can finally be made.
+
+| Forecaster | RPS | Hit rate |
+|---|---|---|
+| **Closing line** (de-vigged, Shin) | **0.1868** | 59.6% |
+| Opening line (de-vigged, Shin) | 0.1886 | — |
+| Base rates (44/26/30) | 0.2347 | ~44% |
+| **This model** | **0.2040** | 53.6% |
+
+**The model loses to the market by 9.2%, and to the opening line by 8.2%.** It
+beats base rates by 13%, which is the same result as before and now clearly
+worth much less than it sounded.
+
+### Blending does not rescue it
+
+Mixing the model into the market at weight *w*, scored on the same 679 matches:
+
+| Model weight | 0% | 10% | 20% | 30% | 50% | 100% |
+|---|---|---|---|---|---|---|
+| RPS | **0.18677** | 0.18771 | 0.18882 | 0.19011 | 0.19320 | 0.20397 |
+| vs market | — | -0.50% | -1.10% | -1.79% | -3.45% | -9.21% |
+
+The optimum is zero. Every gram of this model added to the market makes the
+forecast worse, monotonically. In the forecasting literature a well-built model
+usually earns a small positive weight; this one earns none.
+
+### Betting its disagreements loses money
+
+Backing the model's edge against the **opening** price, same 679 matches:
+
+| Minimum edge | Bets | ROI | Mean CLV |
+|---|---|---|---|
+| 2% | 571 | **-13.6%** | -6.41% |
+| 5% | 498 | -19.1% | -6.53% |
+| 10% | 407 | -24.4% | -6.95% |
+| 20% | 262 | **-27.5%** | -7.63% |
+
+The pattern is the damning part: **the bigger the model's disagreement with the
+market, the more wrong it is.** Consistently negative closing-line value says
+the same thing — these bets are taken at prices the market then moves away
+from, in the wrong direction.
+
+This is why `trading_predict_fixtures` no longer suggests picks by default.
+`suggest_picks: true` still works, for a model you have measured yourself, and
+every response carrying picks carries these numbers with it.
+
+### Flat strategies on the same data
+
+760 bets per strategy, closing prices, market-average book, over both seasons:
+
+| Strategy | Strike | Average odds | ROI | Max drawdown |
+|---|---|---|---|---|
+| favourite | 59.6% | 1.85 | **+4.9%** | 13.0% |
+| over 2.5 | 59.3% | 1.77 | +2.5% | 20.7% |
+| home | 44.5% | 3.04 | -7.6% | 61.7% |
+| away | 33.2% | 4.81 | -7.2% | 69.7% |
+| draw | 22.4% | 4.44 | -9.6% | 85.6% |
+| underdog | 19.3% | 6.14 | -11.3% | 88.7% |
+| under 2.5 | 40.7% | 2.26 | -12.2% | 96.1% |
+| value_model (5% edge) | — | — | **-15.8%** | — |
+
+Most strategies lose roughly the bookmaker's margin, which is what should
+happen. Two are positive — and two Premier League seasons is 760 bets down a
+single path, nowhere near enough to call that an edge rather than variance. The
+favourite-longshot bias they hint at is real in the literature; this sample
+cannot establish it, and a strategy is not a strategy until it survives seasons
+it was not chosen on.
+
+`value_model` is the model betting itself: it claimed an average edge of +32%
+and returned -15.8%. A model that is confident and wrong is worse than one that
+is uncertain.
+
+### What this changes
+
+The toolkit's measurement machinery works — it detected its own model's
+worthlessness against the market within minutes of getting real prices, which
+is exactly what it was built to do. The model does not.
+
+Nothing here says the pipeline is wrong. It says goals-only ratings cannot
+compete with a market that prices team news, lineups and money flow. The next
+step is better inputs (shot quality, availability), not more fitting, and any
+future model should be put through this same sequence before a single bet.

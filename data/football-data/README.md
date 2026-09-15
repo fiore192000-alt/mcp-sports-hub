@@ -39,5 +39,19 @@ reach does. Without them:
 With them, all of the above light up automatically. Nothing else needs
 configuring, and the tools report which source answered.
 
-This directory is not in `.gitignore`: whether to commit the CSVs is your
-call. They are a few hundred KB per league-season.
+The season subdirectories are gitignored. The CSVs are football-data.co.uk's
+data, not this repository's, so redistributing them is left to whoever
+downloads them; this README and the layout are all that is tracked.
+
+## What has been measured with files dropped in here
+
+Two complete Premier League seasons (2021-22 and 2023-24) were enough to answer
+the question the toolkit was built around, and the answer is in
+[docs/Evaluation.md](../../docs/Evaluation.md): **the model loses to the
+market**, betting its disagreements loses 13-27% of turnover, and blending it
+into the market helps at no weight. To reproduce, download
+
+- `https://www.football-data.co.uk/mmz4281/2324/E0.csv` into `2324/E0.csv`
+- `https://www.football-data.co.uk/mmz4281/2122/E0.csv` into `2122/E0.csv`
+
+and run `npm run track -- hindcast --leagues E0 --seasons 2324 --source footballdata`.

@@ -48,7 +48,7 @@ const STRATEGY_DOCS: Record<Strategy, string> = {
   over25: "Back over 2.5 goals.",
   under25: "Back under 2.5 goals.",
   value_model: "Walk-forward Poisson model: fit attack/defence strengths on matches ALREADY PLAYED at that point in the season, price the match, and bet when the model's edge over the offered price clears edge_pct. No lookahead — a team's own future results never inform its rating.",
-  clv_steam: "Closing-line value: bet the OPENING price when it beats the de-vigged CLOSING probability by edge_pct. Measures whether taking early prices beats the market's final word. Needs 2019/20+ seasons, which are the ones carrying separate closing columns.",
+  clv_steam: "Closing-line value: bet the OPENING price when it beats the de-vigged CLOSING probability by edge_pct. Measures whether taking early prices beats the market's final word. Needs 2019/20+ seasons, which are the ones carrying separate closing columns. Read its closing-line value with care: this strategy SELECTS on beating the close, so a high average CLV and a 100% beat-the-close rate are its entry rule restated, not evidence of skill. Judge it on ROI.",
 };
 
 const MARKET_LABEL: Record<FdOutcome, string> = {
@@ -799,7 +799,8 @@ export function register(server: McpServer): void {
       rho: z.number().gte(-0.3).lte(0.3).optional().describe("Dixon-Coles low-score correction (default -0.1)"),
       book: z.enum(["avg", "max", "b365", "pinnacle"]).optional().describe("Which market price to compare against (default avg)"),
       days_ahead: z.number().int().min(1).max(30).optional().describe("Only fixtures kicking off within this many days (default 10)"),
-      min_edge_pct: z.number().min(0).max(100).optional().describe("Edge required before a fixture gets a suggested pick (default 5)"),
+      min_edge_pct: z.number().min(0).max(100).optional().describe("Edge required before a fixture gets a suggested pick (default 5). Only matters when suggest_picks is on."),
+      suggest_picks: z.boolean().optional().describe("Turn the model's disagreements with the market into suggested bets with stakes (default FALSE). Measured over 679 Premier League matches with real prices, betting this model's disagreements lost 14-27% of turnover at every edge threshold, with closing-line value around -6.5%. Turn it on only with a model you have measured yourself."),
       markets: z.enum(["1x2", "ou25", "both"]).optional().describe("Markets to consider for the pick (default both)"),
       bankroll: z.number().positive().optional().describe("Bankroll for stake sizing (default 100)"),
       kelly_fraction: z.number().gt(0).lte(1).optional().describe("Fraction of full Kelly (default 0.25)"),
@@ -967,7 +968,7 @@ export function register(server: McpServer): void {
         const selections = candidateKeys
           .filter((k) => marketOdds[k] !== undefined)
           .map((k) => ({ name: k, odds: marketOdds[k] as number, probability: modelProb[k] }));
-        const assessed = selections.length
+        const assessed = selections.length && (args.suggest_picks ?? false)
           ? assessSelections(selections, {
               bankroll,
               kelly_fraction: args.kelly_fraction,
@@ -1027,6 +1028,9 @@ export function register(server: McpServer): void {
         ...(predictions.some((p) => p.assumed_prior_for) ? {
           promoted_prior: promotedPrior,
           promoted_prior_note: "Some fixtures involve a team with no history in the rated seasons; they were priced on the promoted-team prior and each one names it in `assumed_prior_for`. Set rate_promoted false to have them reported as unrated instead.",
+        } : {}),
+        ...(args.suggest_picks ? {
+          picks_warning: "Picks are the model disagreeing with the market. Measured over 679 Premier League matches with real opening prices, doing that lost 13.6% of turnover at a 2% edge threshold and 27.5% at 20%, with mean closing-line value of -6.5%: the larger the disagreement, the more wrong it was. See docs/Evaluation.md. These are not tips.",
         } : {}),
         ...(Object.keys(coverage).length ? {
           data_quality: coverage,

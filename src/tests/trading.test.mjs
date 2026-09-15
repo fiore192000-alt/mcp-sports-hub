@@ -16,10 +16,14 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dist = (p) => join(__dirname, "..", "..", "dist", p);
 
+// Point the local-CSV drop-in at nothing, so whatever a developer happens to
+// have in data/football-data cannot change what these tests see.
+process.env.SPORTS_HUB_DATA_DIR = join(__dirname, "fixtures", "no-such-dir");
+
 const {
   devig, kelly, arbitrage, hedge, matchModel, fitRatings, expectedGoals, assessSelections,
 } = await import(dist("shared/betting-math.js"));
-const { parseCsv, parseFdDate, priceFor, toFixtures, toMatches } = await import(dist("shared/football-csv.js"));
+const { fetchLeagueSeason, parseCsv, parseFdDate, priceFor, toFixtures, toMatches } = await import(dist("shared/football-csv.js"));
 const trading = await import(dist("providers/trading.js"));
 const { seasonPath, fetchOpenFootballSeason } = await import(dist("shared/openfootball.js"));
 const { loadSeasonData } = await import(dist("shared/football-source.js"));
@@ -570,7 +574,7 @@ describe("predicting and scoring (stubbed CSVs)", () => {
   };
 
   it("prices the upcoming fixtures and keeps the far-off ones out", async () => {
-    const data = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10 });
+    const data = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10, suggest_picks: true });
     assert.equal(data.predictions.length, 3, "the fixture 25 days out is outside the horizon");
     const strong = data.predictions.find((p) => p.home === "Strong");
     assert.equal(strong.most_likely, "home");
@@ -583,10 +587,23 @@ describe("predicting and scoring (stubbed CSVs)", () => {
   });
 
   it("declines a fixture where neither side has history", async () => {
-    const data = await call("trading_predict_fixtures", { leagues: "I1", season: "2627", days_ahead: 10 });
+    const data = await call("trading_predict_fixtures", { leagues: "I1", season: "2627", days_ahead: 10, suggest_picks: true });
     assert.equal(data.predictions.length, 0, "the promoted-team prior cannot stand in for both sides at once");
     assert.equal(data.unrated.length, 1, "Roma and Lazio have no history in the stubbed archive");
     assert.match(data.unrated[0].reason, /prior playing itself/);
+  });
+
+  it("suggests no bets unless asked, and warns when asked", async () => {
+    const quiet = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10 });
+    assert.ok(quiet.predictions.length > 0);
+    assert.ok(quiet.predictions.every((p) => p.pick === undefined), "no pick unless suggest_picks is on");
+    assert.equal(quiet.picks_suggested, 0);
+    assert.equal(quiet.picks_warning, undefined);
+
+    const loud = await call("trading_predict_fixtures", { leagues: "E0", season: "2627", days_ahead: 10, suggest_picks: true });
+    assert.ok(loud.predictions.some((p) => p.pick), "picks come back when asked for");
+    assert.match(loud.picks_warning, /lost 13.6% of turnover|not tips/,
+      "and they carry what betting this model actually did");
   });
 
   it("prices a fixture with one unknown side, and says which side it assumed", async () => {
@@ -946,22 +963,19 @@ describe("local CSV drop-in", () => {
   });
 
   it("reads a dropped-in season instead of the network, odds and all", async () => {
-    // The module reads the env var at import time, so load a fresh copy.
-    const fresh = await import(`${dist("shared/football-csv.js")}?local-test`);
-    const rows = await fresh.fetchLeagueSeason("I1", "2627");
+    const rows = await fetchLeagueSeason("I1", "2627");
     assert.equal(rows.length, 2);
     assert.equal(fetched.length, 0, "a local copy means no request at all");
-    const matches = fresh.toMatches(rows, "I1", "2627", "avg");
+    const matches = toMatches(rows, "I1", "2627", "avg");
     assert.equal(matches.length, 2);
     assert.equal(matches[0].prices.open.H.odds, 1.40, "the odds the mirrors do not have");
     assert.equal(matches[0].prices.close.H.odds, 1.35);
   });
 
   it("falls through to the network when the file is not there", async () => {
-    const fresh = await import(`${dist("shared/football-csv.js")}?local-test`);
     // A league-season no other test touches: the HTTP cache is process-wide
     // and keyed by URL, so a combination used elsewhere would resolve from it.
-    await assert.rejects(() => fresh.fetchLeagueSeason("D1", "9998"), /403/);
+    await assert.rejects(() => fetchLeagueSeason("D1", "9998"), /403/);
     assert.ok(fetched.some((u) => u.includes("football-data.co.uk")), "it did try the archive");
   });
 });

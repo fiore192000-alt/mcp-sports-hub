@@ -21,6 +21,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dist = (p) => join(__dirname, "..", "..", "dist", p);
 
+// Point the local-CSV drop-in at nothing, so whatever a developer happens to
+// have in data/football-data cannot change what these tests see.
+process.env.SPORTS_HUB_DATA_DIR = join(__dirname, "fixtures", "no-such-dir");
+
 const { fetchOpenFootballSeason } = await import(dist("shared/openfootball.js"));
 const { fitRatings, expectedGoals, matchModel } = await import(dist("shared/betting-math.js"));
 const trading = await import(dist("providers/trading.js"));

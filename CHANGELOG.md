@@ -30,6 +30,12 @@ Every backtest result ships with its caveats (assumed fills, sample size, the ri
 
 **Data-quality reporting.** A match whose date has passed with no result is a hole in the source, not lag: `trading_predict_fixtures` returns those under `data_quality`, and `trading_score_predictions` distinguishes a prediction still to come from one the source will never settle, and from a name that is not in the source at all.
 
+**Measured the model against a real bookmaker, and turned picks off because of what came back.** With two complete Premier League seasons of prices (679 matches), the model scores RPS 0.204 against the closing line's 0.187 and the opening line's 0.189 — it loses to both. Blending it into the market at any weight makes the forecast monotonically worse, so the optimal weight on this model is zero. Backing its disagreements with the opening price lost 13.6% of turnover at a 2% edge threshold and 27.5% at 20%, with closing-line value around -6.5%: the larger the disagreement, the more wrong it was. `trading_predict_fixtures` therefore defaults `suggest_picks` to false, and any response carrying picks carries those numbers. Full write-up in docs/Evaluation.md, including the first real backtest of the flat strategies.
+
+**`clv_steam` documents its own circularity**: the strategy selects on beating the close, so its closing-line value is its entry rule restated, not evidence. Judge it on ROI.
+
+**The local CSV directory is resolved per call**, not at import time, so tests can point it at nothing — they were otherwise reading whatever CSVs a developer happened to have on disk, which is how this was found.
+
 **Local CSV drop-in.** `data/football-data/<season>/<LEAGUE>.csv` (or `SPORTS_HUB_DATA_DIR`) is read before the network, in the site's own layout, so a file downloaded in a browser restores odds — and with them the market benchmark, edges and backtests — on a machine that cannot reach football-data.co.uk at all.
 
 **Promoted-team prior.** `trading_predict_fixtures` prices a fixture with one unrated side by assuming 0.85 attack / 1.15 defence rather than declining it. Measured over the top three leagues: identical RPS on the 5,508 fixtures both variants cover, and 172 extra fixtures predicted at RPS 0.191 against 0.2298 for base rates. A coverage gain, not an accuracy one. Each affected fixture names the assumption; `rate_promoted: false` restores the old behaviour; with both sides unknown the fixture is still declined, because the forecast would be the prior playing itself.

@@ -173,12 +173,18 @@ async function hindcast() {
           const fit = fitRatings(pool, { half_life_days: 240, as_of: m.ts });
           const xg = expectedGoals(fit, m.home, m.away);
           if (xg) {
-            const model = matchModel(xg.home, xg.away, { rho: -0.1 });
+              const model = matchModel(xg.home, xg.away, { rho: -0.1 });
+            // Attach the prices this match actually carried, so the scorer can
+            // put the model next to the market instead of next to base rates.
+            // Closing where the season has it, opening otherwise.
+            const priced = (outcome) => m.prices.close[outcome]?.odds ?? m.prices.open[outcome]?.odds;
+            const market = { home: priced("H"), draw: priced("D"), away: priced("A") };
             predictions.push({
               date: m.date, league, home: m.home, away: m.away,
               prob_home: model.probabilities.home,
               prob_draw: model.probabilities.draw,
               prob_away: model.probabilities.away,
+              ...(market.home && market.draw && market.away ? { market_odds: market } : {}),
             });
           }
         }

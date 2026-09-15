@@ -73,12 +73,19 @@ export const FD_FIXTURES_PATH = "/fixtures.csv";
  * policy, an outage or a rate limit can take away. A local copy is the one
  * source nothing can block.
  */
-export const FD_DATA_DIR = process.env.SPORTS_HUB_DATA_DIR ?? "data/football-data";
+export function dataDir(): string {
+  return process.env.SPORTS_HUB_DATA_DIR ?? "data/football-data";
+}
 
-/** Read a local CSV if it is there. Anything unreadable falls through to the network. */
+/**
+ * Read a local CSV if it is there. Anything unreadable falls through to the
+ * network. The directory is resolved per call, not at import time, so a test
+ * can point it somewhere empty and a server can be reconfigured without a
+ * restart.
+ */
 async function readLocal(...segments: string[]): Promise<string | undefined> {
   try {
-    const text = await readFile(resolve(join(FD_DATA_DIR, ...segments)), "utf8");
+    const text = await readFile(resolve(join(dataDir(), ...segments)), "utf8");
     return text.trim() ? text : undefined;
   } catch {
     return undefined;
