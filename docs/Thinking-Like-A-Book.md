@@ -147,3 +147,50 @@ and is worth nothing by itself.
 
 Anyone promising both — high hit rate *and* long-run profit *and* short-term
 consistency — is describing something this data says does not exist.
+
+## 7. What the one real edge actually pays
+
+The only pattern that survived validation — home/favourite under 1.50, at the
+best available price — across 19 leagues, 2006 to 2025:
+
+| | |
+|---|---|
+| Qualifying bets per year | **793** (between 522 and 1,073) |
+| Strike rate | 77.0% |
+| Average price | 1.33 |
+| ROI | **+2.04%** |
+| Average annual ROI | +1.84% |
+| Losing years | **4 of 20** |
+
+Expected annual profit, flat staking:
+
+| Bankroll | Stake | Profit/year | % of bank | **Turnover** |
+|---|---|---|---|---|
+| €1,000 | 1% (€10) | €162 | 16.2% | €7,930 |
+| €5,000 | 1% (€50) | €810 | 16.2% | €39,650 |
+| €5,000 | 2% (€100) | €1,620 | 32.4% | €79,300 |
+| €20,000 | 2% (€400) | €6,481 | 32.4% | €317,200 |
+
+Three things in that table decide whether any of it is real.
+
+**The turnover column is the problem, not the profit column.** Making €1,620
+means pushing €79,300 through bookmaker accounts, at the best price in the
+market, on short favourites. That is the exact customer profile every trading
+desk flags. The edge does not die because the model stops working; it dies
+because the accounts get limited to €5 stakes, usually within months.
+
+**One year in five loses money.** Four of the last twenty did, and the
+theoretical rate is about 15%. Two losing years back to back is perfectly
+ordinary and tells you nothing about whether the edge is still there.
+
+**Every bet must be at the best price.** The identical selections at the market
+average return -1.2%. One bet placed lazily at the average price costs roughly
+what one and a half bets at the best price earn. This is not a strategy with a
+price-shopping bonus — the price shopping *is* the strategy.
+
+So: 793 bets a year, two or three a day, every day, each placed within minutes
+of the opening price across a dozen accounts, for 16-32% of a bankroll before
+tax, with a 20% chance of a losing year and a limit notice at the end of it.
+That is the best this data supports. Whether it is worth doing is not a
+question the data can answer — but it should be answered with those numbers in
+front of you, not with a hit rate.
