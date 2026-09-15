@@ -608,7 +608,51 @@ Where the 9.5% comes from, leaving one match out at a time:
 One match — a 0-3 the market priced at 60% for the home side — is the entire
 result. Remove it and the model is behind again.
 
-This is what a ten-match review is for: process checks, and misses worth
-investigating. It is not for deciding whether a model works, and the `review`
-command prints the two-sigma interval (0.115 to 0.208 here) so the temptation
-is at least visible.
+The Premier League window over the same dates behaves identically:
+
+| | Model | Market |
+|---|---|---|
+| RPS over ten matches | **0.1733** | 0.1849 |
+| Advantage | **+6.3% for the model** | |
+
+| Match removed | Advantage becomes |
+|---|---|
+| Coventry v Hull | **-10.7%** — it vanishes |
+| Liverpool v Nott'm Forest | +3.0% |
+| *(any other single match)* | +4.9% to +13.4% |
+
+### The mechanism, which is sharper than "small samples are noisy"
+
+In both leagues the single match carrying the result is one where **the market
+was confidently wrong**: Coventry v Hull priced at 51% for the home side and
+finished 0-1; Fiorentina v Frosinone priced at 60% and finished 0-3. RPS
+punishes confident errors heavily, so one of them swamps a ten-match average.
+
+The model "won" those matches by being less sure — 24% where the market said
+51%, 35% where it said 60%. That is not skill. It is a model with less
+information spreading its probability wider, which looks like genius on the day
+the favourite loses and costs 3% over 8,069 matches.
+
+### The hypothesis this generated, and its death
+
+Both windows fall in late August. That suggests something testable: perhaps the
+model is relatively better early in the season, when the market has few results
+to price from either. Split the 8,069-match validation set by how far into the
+season each match falls:
+
+| Season phase | Matches | Model | Market | Gap |
+|---|---|---|---|---|
+| Rounds 1-8 | 1,666 | 0.1956 | 0.1891 | -3.44% |
+| 9-15 | 1,398 | 0.1984 | 0.1913 | -3.76% |
+| 16-23 | 1,849 | 0.2037 | 0.1992 | -2.27% |
+| 24-30 | 1,750 | 0.2030 | 0.1983 | -2.36% |
+| 31+ | 1,406 | 0.2049 | 0.1983 | -3.32% |
+
+No trend, and the early-season gap is if anything on the wide side. The
+hypothesis is dead, which is the correct outcome and the whole point of
+generating it from ten matches and testing it on eight thousand.
+
+This is what a ten-match review is for: process checks, misses worth
+investigating, and hypotheses to kill elsewhere. It is not for deciding whether
+a model works, and the `review` command prints the two-sigma interval (0.115 to
+0.208 for the Serie A window) so the temptation is at least visible.
