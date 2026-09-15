@@ -679,3 +679,99 @@ export function scoreForecasts(
     hit_rate: hits / n,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Pricing a market — the inverse of de-vigging
+// ---------------------------------------------------------------------------
+
+export type MarginMethod = "proportional" | "power" | "additive";
+
+/**
+ * Round to the increments a book actually posts. Nobody displays 2.4713.
+ */
+export function tickOdds(odds: number): number {
+  const step = odds < 2 ? 0.01 : odds < 3 ? 0.02 : odds < 4 ? 0.05 : odds < 6 ? 0.1 : odds < 10 ? 0.2 : odds < 20 ? 0.5 : 1;
+  return Math.round(odds / step) * step;
+}
+
+export interface PricedMarket {
+  method: MarginMethod;
+  margin_pct: number;
+  booksum: number;
+  outcomes: Array<{
+    name: string;
+    fair_probability: number;
+    fair_odds: number;
+    posted_odds: number;
+    /**
+     * How far the posted price is cut below the fair one, as a percentage of
+     * the fair odds. This is what the bettor actually pays on this outcome,
+     * and the only reading that shows who carries the margin: a flat tax on
+     * probabilities is not a flat tax on prices.
+     */
+    odds_cut_pct: number;
+  }>;
+}
+
+/**
+ * Turn fair probabilities into the odds a bookmaker would display, by adding a
+ * margin instead of removing one.
+ *
+ * The method matters as much as the size. `proportional` taxes every outcome
+ * equally, which no real book does. `power` loads the longshots harder — which
+ * is what the market actually does, and is why backing short-priced favourites
+ * at the best available price is the one pattern that survives validation
+ * (docs/Evaluation.md). If you want to reproduce a real book, use power.
+ */
+export function applyMargin(
+  probabilities: number[],
+  marginPct: number,
+  method: MarginMethod = "power",
+  names?: string[],
+): PricedMarket {
+  if (probabilities.length < 2) throw new Error("A market needs at least 2 outcomes");
+  for (const p of probabilities) {
+    if (!(p > 0 && p < 1)) throw new Error(`Probability out of range: ${p}`);
+  }
+  const total = probabilities.reduce((a, b) => a + b, 0);
+  if (Math.abs(total - 1) > 0.02) {
+    throw new Error(`Probabilities sum to ${round(total, 4)}; a market must sum to 1 before a margin is added`);
+  }
+  const fair = probabilities.map((p) => p / total);
+  const target = 1 + marginPct / 100;
+
+  let booked: number[];
+  if (method === "additive") {
+    booked = fair.map((p) => p + (target - 1) / fair.length);
+  } else if (method === "proportional") {
+    booked = fair.map((p) => p * target);
+  } else {
+    // p^k summing to the target: k < 1 inflates the longshots most, which is
+    // how a real book distributes its margin.
+    let lo = 0.2, hi = 1;
+    for (let i = 0; i < 100; i++) {
+      const mid = (lo + hi) / 2;
+      const sum = fair.reduce((a, p) => a + p ** mid, 0);
+      if (sum > target) lo = mid; else hi = mid;
+    }
+    const k = (lo + hi) / 2;
+    booked = fair.map((p) => p ** k);
+  }
+
+  const bookedTotal = booked.reduce((a, b) => a + b, 0);
+  return {
+    method,
+    margin_pct: round(marginPct, 3),
+    booksum: round(bookedTotal, 6),
+    outcomes: fair.map((p, i) => {
+      const posted = round(tickOdds(1 / booked[i]), 3);
+      return {
+        name: names?.[i] ?? `outcome_${i + 1}`,
+        fair_probability: asProb(p),
+        fair_odds: asOdds(1 / p),
+        posted_odds: posted,
+        odds_cut_pct: asPct(1 - posted * p),
+      };
+    }),
+  };
+}

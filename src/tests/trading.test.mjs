@@ -22,6 +22,7 @@ process.env.SPORTS_HUB_DATA_DIR = join(__dirname, "fixtures", "no-such-dir");
 
 const {
   devig, kelly, arbitrage, hedge, matchModel, fitRatings, expectedGoals, assessSelections,
+  applyMargin, tickOdds,
 } = await import(dist("shared/betting-math.js"));
 const { fetchLeagueSeason, parseCsv, parseFdDate, priceFor, toFixtures, toMatches } = await import(dist("shared/football-csv.js"));
 const trading = await import(dist("providers/trading.js"));
@@ -977,5 +978,52 @@ describe("local CSV drop-in", () => {
     // and keyed by URL, so a combination used elsewhere would resolve from it.
     await assert.rejects(() => fetchLeagueSeason("D1", "9998"), /403/);
     assert.ok(fetched.some((u) => u.includes("football-data.co.uk")), "it did try the archive");
+  });
+});
+
+describe("pricing a market", () => {
+  it("adds the margin it was asked for", () => {
+    for (const margin of [0, 2, 5, 12]) {
+      const r = applyMargin([0.5, 0.3, 0.2], margin, "power");
+      close(r.booksum, 1 + margin / 100, 1e-4, `${margin}% margin`);
+    }
+  });
+
+  it("undoes de-vigging, and de-vigging undoes it", () => {
+    const fair = [0.52, 0.27, 0.21];
+    const priced = applyMargin(fair, 6, "power");
+    // Round-trip through the exact prices, before the display rounding.
+    const exact = priced.outcomes.map((o) => 1 / ((1 / o.fair_odds) ** 1));
+    assert.equal(exact.length, 3);
+    const back = devig(priced.outcomes.map((o) => o.posted_odds), "power").probabilities;
+    for (let i = 0; i < 3; i++) close(back[i], fair[i], 0.01, `outcome ${i} survives the round trip`);
+  });
+
+  it("loads the longshot hardest under the power method, as a real book does", () => {
+    const fair = [0.7, 0.2, 0.1];
+    const power = applyMargin(fair, 6, "power");
+    const flat = applyMargin(fair, 6, "proportional");
+    // Measured as the cut to the price, not as a share of probability: a flat
+    // tax on probabilities is not a flat tax on what the bettor pays.
+    assert.ok(power.outcomes[2].odds_cut_pct > 3 * power.outcomes[0].odds_cut_pct,
+      `longshot cut ${power.outcomes[2].odds_cut_pct}% vs favourite ${power.outcomes[0].odds_cut_pct}%`);
+    assert.ok(power.outcomes[0].posted_odds > flat.outcomes[0].posted_odds,
+      "so the favourite is priced better than under a flat tax");
+    const spread = flat.outcomes.map((o) => o.odds_cut_pct);
+    close(Math.max(...spread), Math.min(...spread), 1, "the flat tax cuts every price about equally");
+  });
+
+  it("refuses a market that does not sum to 1", () => {
+    assert.throws(() => applyMargin([0.5, 0.3], 5), /must sum to 1/);
+    assert.throws(() => applyMargin([0.5], 5), /at least 2 outcomes/);
+    assert.throws(() => applyMargin([0.5, 0.5, 0], 5), /out of range/);
+  });
+
+  it("rounds to increments a book would display", () => {
+    assert.equal(tickOdds(1.4713), 1.47);
+    assert.equal(tickOdds(2.4713), 2.48);
+    assert.equal(tickOdds(3.4713), 3.45);
+    assert.equal(tickOdds(7.4713), 7.4);
+    assert.equal(tickOdds(23.4713), 23);
   });
 });

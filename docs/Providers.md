@@ -1,6 +1,6 @@
 # Providers
 
-Sports Hub aggregates **43 independent sports API providers** into one MCP server. Each provider registers its own tools, all prefixed with the provider name to avoid collisions. **421 tools** total.
+Sports Hub aggregates **43 independent sports API providers** into one MCP server. Each provider registers its own tools, all prefixed with the provider name to avoid collisions. **422 tools** total.
 
 
 ---
@@ -722,12 +722,12 @@ Sports Hub aggregates **43 independent sports API providers** into one MCP serve
 | | |
 |---|---|
 | **Prefix** | `trading_` |
-| **Tools** | 11 |
+| **Tools** | 12 |
 | **API Base** | None (local computation) + `https://www.football-data.co.uk` for backtests |
 | **Auth** | None |
 | **Rate Limits** | None for the maths; fair use on the CSV archive (capped at 20 files per backtest) |
 | **Sports** | Football/soccer betting and trading |
 
-**Tools:** `trading_list_strategies`, `trading_devig_odds`, `trading_evaluate_bet`, `trading_find_arbitrage`, `trading_hedge_position`, `trading_poisson_model`, `trading_team_ratings`, `trading_backtest`, `trading_closing_line_value`, `trading_predict_fixtures`, `trading_score_predictions`
+**Tools:** `trading_list_strategies`, `trading_devig_odds`, `trading_evaluate_bet`, `trading_find_arbitrage`, `trading_hedge_position`, `trading_poisson_model`, `trading_team_ratings`, `trading_backtest`, `trading_closing_line_value`, `trading_predict_fixtures`, `trading_score_predictions`, `trading_price_market`
 
 **Caveats:** A backtest assumes you got the listed price on every qualifying match, with no stake limits and no line movement. Separate closing-odds columns only exist from season 2019/20 onward; earlier seasons fall back to the single published price and the result says so. Treat a profitable run as a hypothesis to confirm out-of-sample, not a signal.

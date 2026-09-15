@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete list of all **421 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
+Complete list of all **422 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
 
 ---
 
@@ -836,7 +836,7 @@ date: formatted YYYYMMDD
 
 ---
 
-## Trading Toolkit (`trading_`) — 11 tools
+## Trading Toolkit (`trading_`) — 12 tools
 
 Local computation — no API key. `trading_backtest` and `trading_team_ratings` read the keyless football-data.co.uk archive; the rest work entirely on numbers you pass in.
 
@@ -853,3 +853,4 @@ Local computation — no API key. `trading_backtest` and `trading_team_ratings` 
 | `trading_closing_line_value` | Measure your bets against the closing line — the single best evidence that a betting process has an edge, ahead of P&L. Give it the price you took and the closing price for each bet; outcomes are optional. | **bets**, closing_margin_pct?, commission_pct? |
 | `trading_predict_fixtures` | Predict upcoming football fixtures: fits team ratings on the season so far, prices every match in the next few days (1X2, over/under), compares against the bookmakers' own prices and flags where the model disagrees enough to bet. Returns prediction rows you can feed straight back into trading_score_predictions once the matches are played. | leagues?, season?, include_previous_season?, half_life_days?, prior_matches?, rho?, book?, days_ahead?, min_edge_pct?, markets?, bankroll?, kelly_fraction?, max_stake_pct?, limit? |
 | `trading_score_predictions` | Score predictions you made earlier against what actually happened: hit rate, ranked probability score and log loss, measured against the bookmakers' own prices as the benchmark, plus calibration and the P&L and closing-line value of any picks. Feed it the `predictions` array from trading_predict_fixtures. | **predictions**, season?, commission_pct?, sample? |
+| `trading_price_market` | Turn fair probabilities into the odds a bookmaker would display, by adding a margin rather than removing one. The inverse of trading_devig_odds. Use it to see what your model's probabilities look like as posted prices, or to check how far a real book's prices sit from your own. | **probabilities**, names?, margin_pct?, method? |

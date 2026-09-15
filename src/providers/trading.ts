@@ -11,6 +11,7 @@ import {
   arbitrage, assessSelections, asOdds, asPct, asProb, devig, expectedGoals,
   fitRatings, hedge, kelly, matchModel, round,
   BASE_RATES, brierScore, logLoss, rankedProbabilityScore, type OutcomeIndex,
+  applyMargin, type MarginMethod,
 } from "../shared/betting-math.js";
 
 // ---------------------------------------------------------------------------
@@ -177,6 +178,24 @@ export function register(server: McpServer): void {
         ...(primary.note ? { note: primary.note } : {}),
       });
     }),
+  );
+
+  // 2b. price a market — the inverse of de-vigging
+  server.tool(
+    "trading_price_market",
+    "Turn fair probabilities into the odds a bookmaker would display, by adding a margin rather than removing one. The inverse of trading_devig_odds. Use it to see what your model's probabilities look like as posted prices, or to check how far a real book's prices sit from your own.",
+    {
+      probabilities: z.array(z.number().gt(0).lt(1)).min(2).max(40).describe("Fair probabilities for EVERY outcome of one market; they must sum to 1"),
+      names: z.array(z.string()).optional().describe('Optional labels aligned with the probabilities, e.g. ["Home","Draw","Away"]'),
+      margin_pct: z.number().min(0).max(100).optional().describe("Margin to add, % (default 5 — roughly what a mainstream book posts on a 1X2 market; the best price across books leaves about 1.2%)"),
+      method: z.enum(["power", "proportional", "additive"]).optional().describe("How the margin is spread (default power). power loads the longshots hardest, which is what real books do; proportional taxes every outcome equally; additive splits it evenly in probability."),
+    },
+    safe(async ({ probabilities, names, margin_pct, method }) =>
+      toolResult({
+        ...applyMargin(probabilities, margin_pct ?? 5, (method ?? "power") as MarginMethod, names),
+        note: "Posted odds are rounded to the increments books display. `odds_cut_pct` is how far each price sits below its fair value — the only reading that shows who carries the margin. Under the power method the longshot is cut hardest and the favourite barely at all, which is the favourite-longshot bias seen from the bookmaker's side.",
+      }),
+    ),
   );
 
   // 3. evaluate a bet — edge, EV, Kelly stake
