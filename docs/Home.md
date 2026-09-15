@@ -90,6 +90,7 @@ By default this loads the `free` preset (20 no-key providers, 174 tools) with ze
 ## Wiki Pages
 
 - **[Configuration](Configuration.md)** — Environment variables, API keys, Claude Desktop/Code/Windows/Linux setup
+- **[Data Sources](Data-Sources.md)** — What was searched, what is reachable, and the input that is missing
 - **[Evaluation](Evaluation.md)** — The forecasting model measured over 19,062 real matches: skill, calibration, and what it still does not prove
 - **[Predicting](Predicting.md)** — Predict a round, score the predictions against the market, week after week
 - **[Providers](Providers.md)** — Detailed reference for all 43 providers with full tool lists

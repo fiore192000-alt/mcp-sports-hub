@@ -374,3 +374,39 @@ Nothing here says the pipeline is wrong. It says goals-only ratings cannot
 compete with a market that prices team news, lineups and money flow. The next
 step is better inputs (shot quality, availability), not more fitting, and any
 future model should be put through this same sequence before a single bet.
+
+## Is a different model the answer? No.
+
+`xgabora/Club-Football-Match-Data` publishes 238k matches with pre-match odds
+**and Elo ratings** — Elo being an entirely different rating system, built by
+other people from the same match results. Putting it head to head with this
+toolkit's Poisson model, on the same 8,069 matches (five leagues, 2022 to
+September 2026, all three forecasters present):
+
+| Forecaster | RPS | Hit rate | vs market |
+|---|---|---|---|
+| Base rates | 0.23032 | 43.6% | -17.88% |
+| Elo (rating difference alone) | 0.20129 | 52.5% | -3.02% |
+| **This model (Poisson)** | 0.20118 | 52.5% | **-2.96%** |
+| Elo + Poisson, 50/50 | 0.20036 | 52.7% | -2.54% |
+| **Market** (average price, de-vigged) | **0.19539** | 53.9% | — |
+| Market + 10% Elo | 0.19561 | 53.8% | -0.11% |
+| Market + 10% Poisson | 0.19563 | 53.8% | -0.12% |
+
+Elo lands within 0.0001 RPS of the Poisson model. Two unrelated methods, built
+by different people, hitting the same wall to four decimal places is not a
+coincidence: **it is the ceiling of what match results alone contain.**
+
+Ensembling the two does gain something real (-2.54% against -2.96%), which is
+what decorrelated errors are supposed to do. It is not shipped: it doubles the
+model surface to move a number that changes no decision, since neither version
+comes close to the market. The measurement is here if that ever stops being
+true.
+
+And once more, from a third independent angle: nothing added to the market
+improves it.
+
+The gap is smaller here (-3%) than in the Premier League study above (-9%)
+because this dataset carries the market **average** price, while that one used
+the **closing** line. Both are the same finding at different sharpness: the
+model trails the average price by about 3% and the closing line by about 9%.

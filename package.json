@@ -26,6 +26,7 @@
     "track": "node scripts/season-tracker.mjs",
     "verify:sources": "npm run build && node scripts/verify-sources.mjs",
     "tune": "npm run build && node scripts/tune-model.mjs",
+    "fetch:archive": "npm run build && node scripts/fetch-archive.mjs",
     "bundle": "npm run build && npx -y @anthropic-ai/mcpb pack"
   },
   "keywords": [
