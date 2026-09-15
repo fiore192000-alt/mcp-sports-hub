@@ -2,8 +2,35 @@
 
 Three `trading_` tools form a loop you can run every week: predict the coming
 fixtures, save what you predicted, and score it once the matches are played.
-No API key is needed — the data comes from the keyless
-[football-data.co.uk](https://www.football-data.co.uk/) archive.
+No API key is needed.
+
+## Where the data comes from
+
+| `source` | What it gives you | Trade-off |
+|---|---|---|
+| `footballdata` | [football-data.co.uk](https://www.football-data.co.uk/): results **and bookmaker odds**, plus roughly the next week of fixtures | The one that lets you measure yourself against the market |
+| `openfootball` | [openfootball/football.json](https://github.com/openfootball/football.json): the full season calendar and results, served from GitHub | **No odds** — no market benchmark, no edge, no picks |
+| `auto` (default) | Tries the archive, falls back to the mirror | Keeps the loop alive on a network that blocks the archive, or during an outage |
+
+The fallback is reported in every result (`source`, and a note saying what was
+lost), so you always know which numbers you are looking at. Team names differ
+between the two — predict and score with the same source.
+
+## From a shell, without an MCP client
+
+```bash
+npm run track -- predict  --leagues I1,E0 --days 10   # log the coming round
+npm run track -- score    --leagues I1,E0             # grade what has been played
+npm run track -- hindcast --leagues I1                # walk-forward check on the season so far
+```
+
+Predictions are appended to `predictions/<LEAGUE>-<SEASON>.json` and are never
+rewritten — a forecast you can edit after the result is not a forecast. Each
+row records when it was made and which source it came from.
+
+`hindcast` is the one that answers "is this any good?" before the next round:
+it re-predicts every match already played this season using only what was
+known before each one, then scores it.
 
 The point of the loop is the scoring. A model that is never scored against the
 market is entertainment.
@@ -16,6 +43,7 @@ trading_predict_fixtures
   season: "2627"         # optional — defaults to the season in progress
   days_ahead: 10
   min_edge_pct: 5
+  source: "auto"         # footballdata | openfootball | auto
 ```
 
 It fits attack/defence ratings on the season so far (plus the previous season
@@ -29,6 +57,10 @@ international breaks — if nothing comes back, that is usually why.
 
 Teams the ratings have never seen (newly promoted sides, in the first season
 after promotion) come back under `unrated` rather than being guessed at.
+
+Fixtures dated before today that still carry no result are skipped, not
+predicted: both sources lag by a few days, and a "prediction" made after
+kick-off is worthless.
 
 ## 2. Save the predictions
 

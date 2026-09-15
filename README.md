@@ -422,7 +422,7 @@ Beyond tools, the server exposes:
 **Prompts** (curated slash-command workflows over the 421 tools):
 - `whats-on-today` · `compare-odds {event}` · `motorsport-weekend {series}` · `league-standings {league}` · `team-deep-dive {team}` · `f1-race {season} {round}` · `build-football-trade {match} {bankroll}` · `backtest-football-strategy {idea} {leagues}` · `predict-and-track {leagues} {season}`
 
-The predict → save → score loop is written up in [docs/Predicting.md](docs/Predicting.md).
+The predict → save → score loop is written up in [docs/Predicting.md](docs/Predicting.md), and runs from a shell with `npm run track -- predict --leagues I1`. It works with no API key: if the odds archive is unreachable it falls back to a keyless GitHub-hosted results mirror, losing the market benchmark but keeping the forecasts and their scoring.
 
 All tools are annotated `readOnly` / `idempotent` so clients can skip confirmation prompts.
 

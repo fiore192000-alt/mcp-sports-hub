@@ -24,6 +24,10 @@ Predicts matches, scores those predictions honestly, turns prices into positions
 
 Every backtest result ships with its caveats (assumed fills, sample size, the risk of tuning on the same data). New `trading` preset; the provider also joins `free`, `soccer` and `odds`. New prompts: `build-football-trade`, `backtest-football-strategy`, `predict-and-track`.
 
+**Second data source, so the loop survives a blocked or failing archive.** `trading_predict_fixtures` and `trading_score_predictions` take a `source`: `footballdata` (football-data.co.uk — results, odds, about a week of fixtures), `openfootball` (a keyless GitHub-hosted mirror with the full season calendar but no odds), or `auto`, which prefers the first and falls back to the second. The fallback is always reported, along with what it costs: no odds means no market benchmark, no edge and no picks — the probabilities and their scoring still work. Fixtures dated before today with no result yet are skipped rather than "predicted", since both sources lag by a few days.
+
+**`npm run track`** (`scripts/season-tracker.mjs`) runs the loop from a shell with no MCP client: `predict` logs a round to `predictions/<LEAGUE>-<SEASON>.json` (append-only — a forecast you can edit after the result is not a forecast), `score` grades what has been played, and `hindcast` re-predicts every match already played this season using only what was known before each one.
+
 Totals: **43 providers / 421 tools** (up from 42 / 410). `footballdata_uk_` now shares the CSV loader with the new provider — same tools, same behaviour.
 
 ### Fixed
@@ -39,7 +43,7 @@ Totals: **43 providers / 421 tools** (up from 42 / 410). `footballdata_uk_` now 
 - **In-flight coalescing.** Concurrent identical requests share one upstream call.
 - **Negative caching** of `404`/`410` for 30s, so a wrong ID is not re-fetched in a loop.
 - **Server instructions** describing `fields` once at connect time rather than on 396 tool schemas.
-- 22 tests covering projection, slimming, capping, retries, coalescing and cache isolation, plus 53 for the trading maths, the archive's odds columns, the backtest engine and the predict/score loop (253 total).
+- 22 tests covering projection, slimming, capping, retries, coalescing and cache isolation, plus 62 for the trading maths, the archive's odds columns, the backtest engine, the predict/score loop and the source fallback (262 total).
 
 ### Changed
 - Tool results are serialized compactly. The previous `JSON.stringify(data, null, 2)` spent 56% of the bytes on indentation no model reads.

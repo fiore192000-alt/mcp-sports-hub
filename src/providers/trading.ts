@@ -5,6 +5,7 @@ import {
   BOOKS, FD_LEAGUES, type Book, type FdFixture, type FdMatch, type FdOutcome, type OddsPhase,
   fetchFixtures, fetchLeagueSeason, normalizeTeam, toFixtures, toMatches,
 } from "../shared/football-csv.js";
+import { type SeasonData, type Source, loadSeasonData, short } from "../shared/football-source.js";
 import {
   type DevigMethod, type RatedMatch, type RatingsFit,
   arbitrage, assessSelections, asOdds, asPct, asProb, devig, expectedGoals,
@@ -787,7 +788,7 @@ export function register(server: McpServer): void {
   // 10. predict upcoming fixtures
   server.tool(
     "trading_predict_fixtures",
-    "Predict upcoming football fixtures: fits team ratings on the season so far, prices every match in the next few days (1X2, over/under), compares against the bookmakers' own prices and flags where the model disagrees enough to bet. Returns prediction rows you can feed straight back into trading_score_predictions once the matches are played.",
+    "Predict upcoming football fixtures: fits team ratings on the season so far, prices every match in the next few days (1X2, over/under), compares against the bookmakers' own prices where they are available, and flags where the model disagrees enough to bet. Works without any API key, and falls back to a keyless GitHub-hosted results mirror when the odds archive is unreachable. Returns prediction rows you can feed straight back into trading_score_predictions once the matches are played.",
     {
       leagues: z.string().optional().describe('Comma-separated league codes, e.g. "I1,E0" (default "E0"). Max 8.'),
       season: z.string().regex(/^\d{4}$/).optional().describe('Season to rate teams from, e.g. "2627" (default: the season in progress)'),
@@ -803,6 +804,7 @@ export function register(server: McpServer): void {
       kelly_fraction: z.number().gt(0).lte(1).optional().describe("Fraction of full Kelly (default 0.25)"),
       max_stake_pct: z.number().gt(0).lte(100).optional().describe("Cap per bet as % of bankroll (default 5)"),
       limit: z.number().int().min(1).max(60).optional().describe("Max fixtures to return (default 20)"),
+      source: z.enum(["auto", "footballdata", "openfootball"]).optional().describe('Data source (default auto): "footballdata" = football-data.co.uk, results + odds, roughly a week of fixtures; "openfootball" = keyless GitHub mirror, full season calendar but NO odds, so no market comparison and no picks; "auto" prefers the first and falls back to the second.'),
     },
     safe(async (args) => {
       const leagues = (args.leagues ? splitList(args.leagues) : ["E0"]).map((l) => l.toUpperCase());
@@ -816,41 +818,32 @@ export function register(server: McpServer): void {
       const now = Date.now();
       const horizon = now + (args.days_ahead ?? 10) * 86_400_000;
 
-      let fixtures: FdFixture[];
-      try {
-        fixtures = toFixtures(await fetchFixtures(), book, leagues);
-      } catch (err) {
-        return errorResult(`Could not read the upcoming-fixtures file: ${err instanceof Error ? err.message : String(err)}`);
-      }
-      const upcoming = fixtures
-        .filter((f) => f.ts <= horizon && f.ts >= now - 2 * 86_400_000)
-        .slice(0, args.limit ?? 20);
+      const source = (args.source ?? "auto") as Source;
 
-      if (upcoming.length === 0) {
-        return toolResult({
-          season, leagues,
-          fixtures_found: fixtures.length,
-          predictions: [],
-          note: fixtures.length
-            ? `The fixtures file has ${fixtures.length} match(es) for ${leagues.join(",")}, none inside the next ${args.days_ahead ?? 10} days. Widen days_ahead.`
-            : `No upcoming fixtures for ${leagues.join(",")} in football-data.co.uk's fixtures file. It covers roughly the next week and is empty mid-break.`,
-        });
-      }
-
-      // Ratings per league, fitted on the seasons requested.
+      // Ratings and fixtures, per league, from whichever source answers.
       const fits = new Map<string, RatingsFit>();
       const ratingNotes: string[] = [];
-      for (const league of new Set(upcoming.map((f) => f.league))) {
-        const seasons = includePrevious ? [previousSeason(season), season] : [season];
+      const sourcesUsed = new Set<string>();
+      const seasons = includePrevious ? [previousSeason(season), season] : [season];
+      const perLeagueFixtures: FdFixture[] = [];
+      let fdFixtures: FdFixture[] | undefined;
+
+      for (const league of leagues) {
         const rated: RatedMatch[] = [];
+        let used: "footballdata" | "openfootball" | undefined;
+        let currentFixtures: FdFixture[] = [];
         for (const code of seasons) {
           try {
-            const rows = await fetchLeagueSeason(league, code);
-            for (const m of toMatches(rows, league, code, book)) {
+            const data = await loadSeasonData(league, code, source, book);
+            used = data.used;
+            sourcesUsed.add(data.used);
+            if (data.note) ratingNotes.push(data.note);
+            for (const m of data.played) {
               rated.push({ home: m.home, away: m.away, homeGoals: m.homeGoals, awayGoals: m.awayGoals, ts: m.ts });
             }
-          } catch {
-            ratingNotes.push(`${league} ${code}: no data (skipped)`);
+            if (code === season) currentFixtures = data.fixtures;
+          } catch (err) {
+            ratingNotes.push(`${league} ${code}: no data (${short(err)})`);
           }
         }
         if (rated.length) {
@@ -860,6 +853,51 @@ export function register(server: McpServer): void {
             as_of: now,
           }));
         }
+
+        if (used === "openfootball") {
+          // This source ships the whole season calendar, priced at nothing.
+          perLeagueFixtures.push(...currentFixtures);
+        } else if (used === "footballdata") {
+          // One shared file covers every league, so fetch it at most once.
+          if (fdFixtures === undefined) {
+            try {
+              fdFixtures = toFixtures(await fetchFixtures(), book, leagues);
+            } catch (err) {
+              fdFixtures = [];
+              ratingNotes.push(`Upcoming-fixtures file unreachable (${short(err)}).`);
+            }
+          }
+          perLeagueFixtures.push(...fdFixtures.filter((f) => f.league === league));
+        }
+      }
+
+      const fixtures = perLeagueFixtures.sort((a, b) => a.ts - b.ts);
+
+      // A fixture dated before today has already been played — the source
+      // simply has not recorded the result yet. Predicting it would be
+      // hindsight wearing a forecast's clothes, so it is excluded and named.
+      const todayStart = Date.UTC(
+        new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate(),
+      );
+      const stale = fixtures
+        .filter((f) => f.ts < todayStart)
+        .map((f) => ({ date: f.date, league: f.league, match: `${f.home} v ${f.away}` }));
+      const upcoming = fixtures
+        .filter((f) => f.ts <= horizon && f.ts >= todayStart)
+        .slice(0, args.limit ?? 20);
+
+      if (upcoming.length === 0) {
+        return toolResult({
+          season, leagues,
+          source: [...sourcesUsed],
+          fixtures_found: fixtures.length,
+          predictions: [],
+          ...(stale.length ? { already_played: stale.slice(0, 20), already_played_note: `${stale.length} fixture(s) are dated before today and carry no result — the source has not caught up. They are not predictable and were skipped.` } : {}),
+          ...(ratingNotes.length ? { rating_notes: ratingNotes } : {}),
+          note: fixtures.length
+            ? `${fixtures.length} fixture(s) known for ${leagues.join(",")}, none inside the next ${args.days_ahead ?? 10} days. Widen days_ahead.`
+            : `No upcoming fixtures for ${leagues.join(",")}. football-data.co.uk's fixtures file covers roughly the next week and is empty mid-break; openfootball carries the full calendar but may not have this league or season.`,
+        });
       }
 
       const bankroll = args.bankroll ?? 100;
@@ -916,6 +954,7 @@ export function register(server: McpServer): void {
         predictions.push({
           date: f.date,
           ...(f.time ? { time: f.time } : {}),
+          ...(f.ts < todayStart + 86_400_000 ? { kicks_off_today: true } : {}),
           league: f.league,
           home: f.home,
           away: f.away,
@@ -943,13 +982,23 @@ export function register(server: McpServer): void {
       }
 
       const withPick = predictions.filter((p) => p.pick !== undefined);
+      const hasMarket = predictions.some((p) => p.market_odds !== undefined);
       return toolResult({
         season,
         leagues,
+        source: [...sourcesUsed],
+        market_data: hasMarket,
+        ...(hasMarket ? {} : {
+          no_market_note: "This source carries no odds, so there is no market comparison, no edge and no pick — the probabilities are the whole output. Scoring them later still works: hit rate, RPS, Brier, log loss and calibration, benchmarked against base rates instead of the market.",
+        }),
         rated_from: includePrevious ? [previousSeason(season), season] : [season],
         model: { half_life_days: args.half_life_days ?? 240, rho, book, min_edge_pct: minEdge, markets },
         fixtures_priced: predictions.length,
         picks_suggested: withPick.length,
+        ...(stale.length ? {
+          already_played_skipped: stale.length,
+          already_played_note: "Fixtures dated before today with no result recorded yet were skipped — the source lags a few days, and a 'prediction' made after kick-off is worthless.",
+        } : {}),
         total_stake: round(withPick.reduce((a, p) => a + ((p.pick as { stake: number }).stake ?? 0), 0), 2),
         predictions,
         ...(unrated.length ? { unrated } : {}),
@@ -989,25 +1038,30 @@ export function register(server: McpServer): void {
         }).optional().describe("The bet you took, if any"),
       })).min(1).max(300).describe("Predictions to score — the array trading_predict_fixtures returned"),
       season: z.string().regex(/^\d{4}$/).optional().describe("Season to look results up in (default: derived from each prediction's date)"),
+      source: z.enum(["auto", "footballdata", "openfootball"]).optional().describe("Where to read results from (default auto). Use the same source the predictions came from — team names differ between them."),
       commission_pct: z.number().min(0).lt(100).optional().describe("Commission on winnings, % (default 0)"),
       sample: z.number().int().min(0).max(60).optional().describe("How many scored matches to list individually (default 10)"),
     },
-    safe(async ({ predictions, season, commission_pct, sample }) => {
+    safe(async ({ predictions, season, source, commission_pct, sample }) => {
       const commission = (commission_pct ?? 0) / 100;
+      const src = (source ?? "auto") as Source;
 
       // Results, one CSV per league-season the predictions touch.
       const needed = new Set(predictions.map((p) => `${p.league.toUpperCase()}|${season ?? seasonForDate(p.date)}`));
       if (needed.size > 20) return errorResult(`These predictions span ${needed.size} league-seasons, over the 20-file cap. Score them in batches.`);
       const results = new Map<string, FdMatch>();
       const unavailable: string[] = [];
+      const sourcesUsed = new Set<string>();
       for (const key of needed) {
         const [league, code] = key.split("|");
         try {
-          for (const m of toMatches(await fetchLeagueSeason(league, code), league, code)) {
+          const data = await loadSeasonData(league, code, src, "avg");
+          sourcesUsed.add(data.used);
+          for (const m of data.played) {
             results.set(`${league}|${normalizeTeam(m.home)}|${normalizeTeam(m.away)}`, m);
           }
         } catch (err) {
-          unavailable.push(`${league} ${code} (${err instanceof Error ? err.message.slice(0, 60) : "fetch failed"})`);
+          unavailable.push(`${league} ${code} (${short(err)})`);
         }
       }
 
@@ -1119,6 +1173,7 @@ export function register(server: McpServer): void {
       return toolResult({
         scored: n,
         pending_count: pending.length,
+        source: [...sourcesUsed],
         accuracy: {
           hits,
           hit_rate_pct: asPct(hits / n),

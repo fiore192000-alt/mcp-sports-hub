@@ -78,7 +78,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 **Betting odds (historical, for backtesting)**: `footballdata_uk_get_matches` (results + closing odds, 2000-now)
 **Building a football trade**: `trading_devig_odds` (fair price from a market), `trading_poisson_model` / `trading_team_ratings` (own probabilities), `trading_evaluate_bet` (edge + Kelly stake), `trading_find_arbitrage`, `trading_hedge_position` (green-up / cash-out)
 **Testing a betting strategy**: `trading_backtest` (ROI, drawdown, CLV over 25 years of results + odds), `trading_list_strategies`, `trading_closing_line_value`
-**Predicting a round and tracking it**: `trading_predict_fixtures` (next fixtures priced against the market) → save the `predictions` array → `trading_score_predictions` after the matches (hit rate, RPS vs the market, calibration, P&L)
+**Predicting a round and tracking it**: `trading_predict_fixtures` (next fixtures priced against the market) → save the `predictions` array → `trading_score_predictions` after the matches (hit rate, RPS vs the market, calibration, P&L). From a shell: `npm run track -- predict|score|hindcast --leagues I1` keeps the log in `predictions/` for you.
 **Basketball (beyond NBA)**: `euroleague_get_games`, `euroleague_get_game_boxscore` (EuroLeague + EuroCup), `bdl_get_*` (NBA)
 **Boxing**: `boxing_get_fighters`, `boxing_get_bouts`, `boxing_get_events` (distinct from MMA)
 **Video highlights**: `highlightly_get_highlights` (multi-sport clips)
@@ -114,7 +114,7 @@ Providers without published limits (ESPN, NHL, MLB, F1, OpenF1, OpenLigaDB, Golf
 - **OpenDota** (`opendota_`): Keyless free tier ~60 req/min, 50k/mo. `opendota_search_players` is a slow DB query (20-30s).
 - **EuroLeague** (`euroleague_`): Keyless official feeds (JSON). Use competition `E` (EuroLeague) or `U` (EuroCup) + season start year. v1 XML feeds are not wrapped (JSON-only).
 - **Football-Data.co.uk** (`footballdata_uk_`): CSV parsed to JSON; historical (updated within days of each round), not live. Cryptic column codes — see https://www.football-data.co.uk/notes.txt.
-- **Trading** (`trading_`): Local computation, no API key and no quota — but `trading_backtest` and `trading_team_ratings` read the football-data.co.uk archive (one CSV per league-season, capped at 20 files per call). A backtest assumes you got the listed price on every qualifying match; treat a profitable run as a hypothesis to confirm out-of-sample, not a signal. Closing-odds columns only exist from season 2019/20 onward — earlier seasons fall back to the single published price and the result says so.
+- **Trading** (`trading_`): Local computation, no API key and no quota — but `trading_backtest` and `trading_team_ratings` read the football-data.co.uk archive (one CSV per league-season, capped at 20 files per call). `trading_predict_fixtures` and `trading_score_predictions` take a `source`: `footballdata` (odds, ~a week of fixtures) or `openfootball` (keyless GitHub mirror, full season calendar, NO odds — so no market benchmark and no picks); `auto` prefers the first and falls back to the second, which is what keeps the loop working on a network that blocks the archive. Team names differ between the two sources, so predict and score with the same one. A backtest assumes you got the listed price on every qualifying match; treat a profitable run as a hypothesis to confirm out-of-sample, not a signal. Closing-odds columns only exist from season 2019/20 onward — earlier seasons fall back to the single published price and the result says so.
 - **Boxing** (`boxing_`): Via RapidAPI; free Basic plan is only **100 requests/month** — use sparingly.
 - **Highlightly** (`highlightly_`): Free Basic = 100 req/day. `sport` is part of the path (e.g. "football" = soccer). Standings need leagueId + season.
 - **TheSportsDB** (`sportsdb_`): Test key "3" = watermarked images. $1/mo Patreon for clean images.
@@ -230,6 +230,9 @@ src/index.ts                 → Lazy-imports, provider filtering, stdio/HTTP tr
 src/shared/http.ts           → fetchJson() with TTL cache, buildUrl(), toolResult(), errorResult()
 src/shared/betting-math.ts   → Pure betting maths: de-vig, EV/Kelly, arbitrage, hedging, Poisson, team ratings
 src/shared/football-csv.ts   → football-data.co.uk archive: CSV parsing + odds-column resolution
+src/shared/football-source.ts → Source resolution: odds archive first, keyless mirror as fallback
+src/shared/openfootball.ts   → Keyless GitHub-hosted results/calendar mirror (no odds)
 src/providers/*.ts           → One file per API, exports register(server)
+scripts/season-tracker.mjs   → CLI loop: predict a round, log it, score it (npm run track)
 src/tests/*.test.mjs         → Offline test suite, incl. the trading maths and backtest engine (run: npm test)
 ```

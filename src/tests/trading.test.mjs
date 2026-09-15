@@ -21,6 +21,8 @@ const {
 } = await import(dist("shared/betting-math.js"));
 const { parseCsv, parseFdDate, priceFor, toMatches } = await import(dist("shared/football-csv.js"));
 const trading = await import(dist("providers/trading.js"));
+const { seasonPath, fetchOpenFootballSeason } = await import(dist("shared/openfootball.js"));
+const { loadSeasonData } = await import(dist("shared/football-source.js"));
 
 const close = (actual, expected, tolerance, message) =>
   assert.ok(Math.abs(actual - expected) <= tolerance,
@@ -663,5 +665,151 @@ describe("predicting and scoring (stubbed CSVs)", () => {
     const scored = await call("trading_score_predictions", { predictions: rows, season: "2627" });
     assert.equal(scored.scored, 2, "the shape predict emits is the shape score accepts");
     assert.ok(scored.probability_scores.rps >= 0);
+  });
+});
+
+describe("openfootball source", () => {
+  let realFetch;
+  const SEASON = {
+    name: "Italian Serie A 2026/27",
+    matches: [
+      { round: "Matchday 1", date: "2026-08-22", time: "18:30", team1: "Udinese Calcio", team2: "Como 1907", score: { ht: [1, 0], ft: [1, 1] } },
+      { round: "Matchday 1", date: "2026-08-22", time: "20:45", team1: "Genoa CFC", team2: "SSC Napoli", score: { ht: [0, 0], ft: [0, 2] } },
+      { round: "Matchday 2", date: "2027-05-30", time: "15:00", team1: "AC Milan", team2: "US Lecce" },
+      { date: "2027-05-30", team1: "Broken" },
+    ],
+  };
+
+  before(() => {
+    realFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      if (!String(url).includes("raw.githubusercontent.com/openfootball")) throw new Error(`unexpected fetch: ${url}`);
+      return { ok: true, status: 200, statusText: "OK", headers: new Headers(), json: async () => SEASON, text: async () => JSON.stringify(SEASON) };
+    };
+  });
+  after(() => { globalThis.fetch = realFetch; });
+
+  it("maps season codes to the directory names the mirror uses", () => {
+    assert.equal(seasonPath("2627"), "2026-27");
+    assert.equal(seasonPath("0001"), "2000-01");
+    assert.equal(seasonPath("9900"), "1999-00");
+  });
+
+  it("splits a season into played matches and remaining fixtures", async () => {
+    const { played, fixtures, url } = await fetchOpenFootballSeason("I1", "2627");
+    assert.match(url, /2026-27\/it\.1\.json$/);
+    assert.equal(played.length, 2);
+    assert.equal(fixtures.length, 1, "rows without a usable team pair are dropped");
+    assert.equal(played[0].result, "D");
+    assert.equal(played[1].result, "A");
+    assert.equal(played[0].totalGoals, 2);
+    assert.deepEqual(played[0].prices, { open: {}, close: {} }, "this source has no odds");
+    assert.equal(fixtures[0].home, "AC Milan");
+    assert.equal(fixtures[0].time, "15:00");
+  });
+
+  it("refuses a league it has no mapping for", async () => {
+    await assert.rejects(() => fetchOpenFootballSeason("XX", "2627"), /no mapping for league/);
+  });
+});
+
+describe("source fallback", () => {
+  let realFetch;
+  const OF = { matches: [{ date: "2026-08-22", team1: "A", team2: "B", score: { ft: [2, 0] } }] };
+  const CSV = "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,AvgH,AvgD,AvgA\n22/08/26,A,B,2,0,H,1.90,3.50,4.00\n";
+  let archiveUp = true;
+  const seen = [];
+
+  before(() => {
+    realFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.includes("football-data.co.uk")) {
+        if (!archiveUp) throw new Error("HTTP 403 Forbidden: Host not in allowlist: www.football-data.co.uk");
+        return { ok: true, status: 200, statusText: "OK", headers: new Headers(), text: async () => CSV };
+      }
+      return { ok: true, status: 200, statusText: "OK", headers: new Headers(), json: async () => OF, text: async () => JSON.stringify(OF) };
+    };
+  });
+  after(() => { globalThis.fetch = realFetch; });
+
+  it("prefers the odds archive when it answers", async () => {
+    archiveUp = true;
+    const data = await loadSeasonData("I1", "9201", "auto");
+    assert.equal(data.used, "footballdata");
+    assert.equal(data.played[0].prices.open.H.odds, 1.90, "odds come through");
+    assert.equal(data.note, undefined);
+  });
+
+  it("falls back to the keyless mirror when the archive is unreachable, and says so", async () => {
+    archiveUp = false;
+    const data = await loadSeasonData("I1", "9202", "auto");
+    assert.equal(data.used, "openfootball");
+    assert.equal(data.played.length, 1);
+    assert.match(data.note, /unreachable/);
+    assert.match(data.note, /no odds/, "the caller is told what it lost");
+  });
+
+  it("propagates the failure when the archive is demanded explicitly", async () => {
+    archiveUp = false;
+    await assert.rejects(() => loadSeasonData("I1", "9203", "footballdata"), /403/);
+  });
+
+  it("never touches the archive when the mirror is demanded explicitly", async () => {
+    archiveUp = true;
+    seen.length = 0;
+    const data = await loadSeasonData("I1", "9204", "openfootball");
+    assert.equal(data.used, "openfootball");
+    assert.ok(!seen.some((u) => u.includes("football-data.co.uk")), "no request to the archive");
+  });
+});
+
+describe("predicting without odds", () => {
+  const tools = new Map();
+  let realFetch;
+  const day = (o) => new Date(Date.now() + o * 86400000).toISOString().slice(0, 10);
+  const SEASON = {
+    matches: [
+      // enough history for both sides, all in the past
+      ...Array.from({ length: 12 }, (_, i) => ({
+        date: day(-40 + i), team1: i % 2 ? "Alpha" : "Beta", team2: i % 2 ? "Beta" : "Alpha",
+        score: { ft: i % 2 ? [3, 0] : [0, 3] },
+      })),
+      // one fixture already played but not yet recorded, one genuinely ahead
+      { date: day(-2), time: "20:45", team1: "Alpha", team2: "Beta" },
+      { date: day(3), time: "20:45", team1: "Alpha", team2: "Beta" },
+    ],
+  };
+
+  before(() => {
+    trading.register({ tool: (name, description, schema, handler) => tools.set(name, handler) });
+    realFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      if (String(url).includes("football-data.co.uk")) throw new Error("HTTP 403 Forbidden: Host not in allowlist");
+      return { ok: true, status: 200, statusText: "OK", headers: new Headers(), json: async () => SEASON, text: async () => JSON.stringify(SEASON) };
+    };
+  });
+  after(() => { globalThis.fetch = realFetch; });
+
+  it("predicts from the mirror, flags the missing market, and suggests nothing", async () => {
+    const result = await tools.get("trading_predict_fixtures")({ leagues: "I1", season: "9301", days_ahead: 10, source: "auto" });
+    assert.notEqual(result.isError, true, result.content[0].text);
+    const data = JSON.parse(result.content[0].text);
+    assert.deepEqual(data.source, ["openfootball"]);
+    assert.equal(data.market_data, false);
+    assert.match(data.no_market_note, /no market comparison|carries no odds/);
+    assert.equal(data.picks_suggested, 0, "no odds means no bet can be evaluated");
+    assert.equal(data.predictions.length, 1, "only the fixture still ahead of us");
+    assert.equal(data.predictions[0].date, day(3));
+    assert.ok(data.predictions[0].prob_home > 0.5, "Alpha has won every meeting 3-0");
+  });
+
+  it("refuses to predict a match that has already kicked off", async () => {
+    const result = await tools.get("trading_predict_fixtures")({ leagues: "I1", season: "9302", days_ahead: 10, source: "openfootball" });
+    const data = JSON.parse(result.content[0].text);
+    assert.equal(data.already_played_skipped, 1);
+    assert.match(data.already_played_note, /worthless|skipped/);
+    assert.ok(!data.predictions.some((p) => p.date === day(-2)));
   });
 });

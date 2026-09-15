@@ -1,0 +1,194 @@
+{
+  "league": "E0",
+  "season": "2627",
+  "created": "2026-09-15T11:26:13.631Z",
+  "predictions": [
+    {
+      "date": "2026-09-18",
+      "time": "20:00",
+      "league": "E0",
+      "home": "Brentford FC",
+      "away": "Chelsea FC",
+      "expected_goals": {
+        "home": 1.91,
+        "away": 1.41
+      },
+      "prob_home": 0.482502,
+      "prob_draw": 0.241976,
+      "prob_away": 0.275522,
+      "prob_over25": 0.644372,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "12:30",
+      "league": "E0",
+      "home": "Tottenham Hotspur FC",
+      "away": "Aston Villa FC",
+      "expected_goals": {
+        "home": 1.36,
+        "away": 1.43
+      },
+      "prob_home": 0.343953,
+      "prob_draw": 0.277142,
+      "prob_away": 0.378905,
+      "prob_over25": 0.527594,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "15:00",
+      "league": "E0",
+      "home": "Everton FC",
+      "away": "Ipswich Town FC",
+      "expected_goals": {
+        "home": 2.1,
+        "away": 1.18
+      },
+      "prob_home": 0.575887,
+      "prob_draw": 0.226029,
+      "prob_away": 0.198084,
+      "prob_over25": 0.635385,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "15:00",
+      "league": "E0",
+      "home": "Brighton & Hove Albion FC",
+      "away": "Arsenal FC",
+      "expected_goals": {
+        "home": 0.98,
+        "away": 1.5
+      },
+      "prob_home": 0.234786,
+      "prob_draw": 0.284996,
+      "prob_away": 0.480217,
+      "prob_over25": 0.450494,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "15:00",
+      "league": "E0",
+      "home": "Newcastle United FC",
+      "away": "Hull City AFC",
+      "expected_goals": {
+        "home": 1.18,
+        "away": 1.4
+      },
+      "prob_home": 0.30414,
+      "prob_draw": 0.288031,
+      "prob_away": 0.407829,
+      "prob_over25": 0.477211,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "17:30",
+      "league": "E0",
+      "home": "Nottingham Forest FC",
+      "away": "Coventry City FC",
+      "expected_goals": {
+        "home": 1.68,
+        "away": 0.74
+      },
+      "prob_home": 0.588034,
+      "prob_draw": 0.261398,
+      "prob_away": 0.150568,
+      "prob_over25": 0.433806,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "14:00",
+      "league": "E0",
+      "home": "AFC Bournemouth",
+      "away": "Liverpool FC",
+      "expected_goals": {
+        "home": 1.82,
+        "away": 1.61
+      },
+      "prob_home": 0.421416,
+      "prob_draw": 0.243082,
+      "prob_away": 0.335503,
+      "prob_over25": 0.666174,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "14:00",
+      "league": "E0",
+      "home": "Leeds United FC",
+      "away": "Crystal Palace FC",
+      "expected_goals": {
+        "home": 1.85,
+        "away": 1.14
+      },
+      "prob_home": 0.527688,
+      "prob_draw": 0.24871,
+      "prob_away": 0.223602,
+      "prob_over25": 0.57477,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "14:00",
+      "league": "E0",
+      "home": "Manchester City FC",
+      "away": "Sunderland AFC",
+      "expected_goals": {
+        "home": 2.09,
+        "away": 0.76
+      },
+      "prob_home": 0.672755,
+      "prob_draw": 0.211574,
+      "prob_away": 0.115671,
+      "prob_over25": 0.543932,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "16:30",
+      "league": "E0",
+      "home": "Fulham FC",
+      "away": "Manchester United FC",
+      "expected_goals": {
+        "home": 1.39,
+        "away": 1.74
+      },
+      "prob_home": 0.297942,
+      "prob_draw": 0.25432,
+      "prob_away": 0.447737,
+      "prob_over25": 0.606539,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.631Z",
+      "source": "openfootball"
+    }
+  ],
+  "model": {
+    "half_life_days": 240,
+    "rho": -0.1,
+    "book": "avg",
+    "min_edge_pct": 5,
+    "markets": "both"
+  }
+}

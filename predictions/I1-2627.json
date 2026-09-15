@@ -1,0 +1,194 @@
+{
+  "league": "I1",
+  "season": "2627",
+  "created": "2026-09-15T11:26:13.394Z",
+  "predictions": [
+    {
+      "date": "2026-09-18",
+      "time": "20:45",
+      "league": "I1",
+      "home": "AC Monza",
+      "away": "US Sassuolo Calcio",
+      "expected_goals": {
+        "home": 1.47,
+        "away": 1.8
+      },
+      "prob_home": 0.305895,
+      "prob_draw": 0.248715,
+      "prob_away": 0.44539,
+      "prob_over25": 0.632929,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "15:00",
+      "league": "I1",
+      "home": "Bologna FC 1909",
+      "away": "Torino FC",
+      "expected_goals": {
+        "home": 1.67,
+        "away": 1.27
+      },
+      "prob_home": 0.455922,
+      "prob_draw": 0.263216,
+      "prob_away": 0.280861,
+      "prob_over25": 0.562262,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "15:00",
+      "league": "I1",
+      "home": "Udinese Calcio",
+      "away": "Cagliari Calcio",
+      "expected_goals": {
+        "home": 1.36,
+        "away": 1.05
+      },
+      "prob_home": 0.426492,
+      "prob_draw": 0.296852,
+      "prob_away": 0.276656,
+      "prob_over25": 0.435059,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "18:00",
+      "league": "I1",
+      "home": "AS Roma",
+      "away": "FC Internazionale Milano",
+      "expected_goals": {
+        "home": 1.39,
+        "away": 1.4
+      },
+      "prob_home": 0.357442,
+      "prob_draw": 0.277251,
+      "prob_away": 0.365307,
+      "prob_over25": 0.528039,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-19",
+      "time": "20:45",
+      "league": "I1",
+      "home": "Venezia FC",
+      "away": "SS Lazio",
+      "expected_goals": {
+        "home": 0.96,
+        "away": 1.59
+      },
+      "prob_home": 0.215558,
+      "prob_draw": 0.275306,
+      "prob_away": 0.509136,
+      "prob_over25": 0.467608,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "12:30",
+      "league": "I1",
+      "home": "ACF Fiorentina",
+      "away": "SSC Napoli",
+      "expected_goals": {
+        "home": 1.03,
+        "away": 1.88
+      },
+      "prob_home": 0.194292,
+      "prob_draw": 0.244947,
+      "prob_away": 0.560761,
+      "prob_over25": 0.555744,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "15:00",
+      "league": "I1",
+      "home": "Frosinone Calcio",
+      "away": "Como 1907",
+      "expected_goals": {
+        "home": 1.24,
+        "away": 1.74
+      },
+      "prob_home": 0.260952,
+      "prob_draw": 0.257649,
+      "prob_away": 0.481399,
+      "prob_over25": 0.571706,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "15:00",
+      "league": "I1",
+      "home": "Parma Calcio 1913",
+      "away": "Genoa CFC",
+      "expected_goals": {
+        "home": 1.11,
+        "away": 1.17
+      },
+      "prob_home": 0.331319,
+      "prob_draw": 0.311491,
+      "prob_away": 0.35719,
+      "prob_over25": 0.399085,
+      "most_likely": "away",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "18:00",
+      "league": "I1",
+      "home": "Juventus FC",
+      "away": "Atalanta BC",
+      "expected_goals": {
+        "home": 1.35,
+        "away": 0.98
+      },
+      "prob_home": 0.440125,
+      "prob_draw": 0.301202,
+      "prob_away": 0.258674,
+      "prob_over25": 0.411473,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    },
+    {
+      "date": "2026-09-20",
+      "time": "20:45",
+      "league": "I1",
+      "home": "AC Milan",
+      "away": "US Lecce",
+      "expected_goals": {
+        "home": 1.63,
+        "away": 0.69
+      },
+      "prob_home": 0.588312,
+      "prob_draw": 0.266685,
+      "prob_away": 0.145002,
+      "prob_over25": 0.408152,
+      "most_likely": "home",
+      "predicted_at": "2026-09-15T11:26:13.394Z",
+      "source": "openfootball"
+    }
+  ],
+  "model": {
+    "half_life_days": 240,
+    "rho": -0.1,
+    "book": "avg",
+    "min_edge_pct": 5,
+    "markets": "both"
+  }
+}
