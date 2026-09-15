@@ -1162,7 +1162,7 @@ export function register(server: McpServer): void {
           scored: 0,
           pending,
           ...(unavailable.length ? { unavailable } : {}),
-          note: "None of these predictions has a result yet. Come back after the matches are played — or check that the team names match the football-data archive exactly (trading_predict_fixtures emits them in that form).",
+          note: `None of these predictions has a result yet${sourcesUsed.size ? ` in ${[...sourcesUsed].join("/")}` : ""}. Come back after the matches are played — or check that the team names match the source you predicted from: the two sources spell them differently ("Inter" vs "FC Internazionale Milano"), and trading_predict_fixtures emits whichever form its source uses.`,
         });
       }
 

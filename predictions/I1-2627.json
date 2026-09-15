@@ -190,5 +190,9 @@
     "book": "avg",
     "min_edge_pct": 5,
     "markets": "both"
+  },
+  "last_scored": {
+    "at": "2026-09-15T11:28:34.771Z",
+    "scored": 0
   }
 }
