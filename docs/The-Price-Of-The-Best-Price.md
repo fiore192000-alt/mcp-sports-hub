@@ -222,7 +222,106 @@ A clean demonstration of the trap sits in the same grid: the *best* training cel
 The train-validation correlation across all 28 cells is 0.295. Picking the maximum of 28
 cells is picking noise.
 
-## 8. What the three freedoms are actually worth
+## 8. The third freedom: what to stake, and what being wrong costs
+
+Simulation over 50,000 paths per case, seed 20260915, cross-checked against the repo's
+own `trading_edge_requirements` — which agreed on all 90 `bets_to_prove` values and all
+45 Kelly stakes, and whose simulated log-growth matched the analytic value to within 0.1
+basis points on all 30 combinations.
+
+### How long before you know
+
+| price | edge | bets to 2 sigma | seasons @200/yr | seasons @1000/yr | P(behind after 1,000 bets) |
+|---|---|---|---|---|---|
+| 1.5 | +1% | 19,796 | 99 | 19.8 | 32.7% |
+| 1.5 | +2% | 4,896 | 24.5 | **4.9** | 18.3% |
+| 2.0 | +2% | 9,996 | 50.0 | 10.0 | 26.4% |
+| **3.0** | **+2%** | **20,196** | **101** | **20.2** | **32.8%** |
+| 3.0 | +5% | 3,276 | 16.4 | 3.3 | 13.5% |
+| 5.0 | +2% | 40,597 | 203 | 40.6 | 37.7% |
+| 10.0 | +2% | 91,597 | 458 | 91.6 | 41.7% |
+
+A genuine +2% edge at price 3.0 needs **twenty seasons** of a thousand bets to separate
+from zero at two sigma, and leaves you behind after any given season a third of the time.
+Realised profit is not a feedback signal on these timescales — closing-line value is, since
+it converges in hundreds of trades instead of tens of thousands. The P&L is the payslip,
+not the instrument panel.
+
+### Drawdown is set by price, not by edge
+
+Median maximum drawdown over a 1,000-bet campaign at flat 1-unit stakes is about 19u at
+price 1.5, 29u at 2.0, 43u at 3.0, 64u at 5.0 and 98u at 10.0 — **almost unchanged**
+whether the edge is 0.5% or 5%. Expressed in years of expected profit, the 90th-percentile
+drawdown is 1.6 years at 1.5/+2%, 3.7 years at 3.0/+2%, and **26 years** at 2.0/+0.5%.
+
+Working rule for a 1,000-bet season: one unit is 1% of bank at price 1.5-2.0, 0.5% at 3.0,
+0.3% at 5.0, 0.2% at 10.0 — a bank of **100 to 250 units** depending on price. Flat-staking
+2% of bank at price 3.0 carries a one-in-ten chance of losing 37% of it *with a real +2%
+edge*.
+
+### The estimation-error penalty, which is the whole section
+
+Since Kelly is approximately `edge / (odds - 1)`, staking on a believed edge when the truth
+is different is exactly staking a multiple of true Kelly — and growth turns **negative above
+2x**. Staking half of Kelly and one-and-a-half times Kelly give *identical* growth, but only
+one of them also multiplies the drawdown. The curve is symmetric in return and brutally
+asymmetric in risk, so the error to make is the low one.
+
+The realistic case is worse than the textbook one. The standard error of a 200-bet ROI
+estimate is **±7.07 percentage points at price 2.0**: a true +2% will measure anywhere from
+−12% to +16%, and you cannot tell it from +5% or from −3%. Sizing full Kelly on that record,
+against a true +2% edge, over 1,000 bets:
+
+| | growth/bet | median wealth | 10th pct | P(lose half) | P(lose 90%) |
+|---|---|---|---|---|---|
+| full Kelly on a 200-bet estimate | **−18.6 bp** | 0.678 | 0.001 | **62.5%** | **36.3%** |
+| half Kelly on the same estimate | −1.4 bp | 1.047 | 0.184 | 37.6% | 10.3% |
+| quarter Kelly on the same estimate | +1.3 bp | 1.094 | 0.599 | 14.9% | 0.9% |
+| full Kelly *knowing* the edge is +2% | +2.0 bp | — | — | 18.3% | <0.1% |
+| not betting at all | 0 | 1.000 | 1.000 | 0% | 0% |
+
+> **A real edge, over-bet on a noisy estimate, is worse than no bet at all.** The loss is
+> not from being wrong about the edge — the edge is there — it is entirely from the sizing.
+
+The same shape appears in the cleaner cases: a true +2% sized as +5% loses 21.8% of the bank
+per 1,000 bets at price 2.0, and a phantom edge (true 0%, believed +3%) loses 36.1% at full
+Kelly against 2.7% at quarter Kelly. Fractional Kelly is not a timidity discount. It is the
+premium on insurance against your own estimate.
+
+If you want to size on a measurement at all, **shrink it first**. Against a prior of 2
+percentage points — defensible, since the best-price margin is about 2% — a 200-bet record
+at price 2.0 justifies staking **7.4%** of what the point estimate suggests. A 1,000-bet
+record raises that to 28.6%. You earn the right to size up by accumulating evidence.
+
+### What it would take, and where the line is
+
+Targeting 5,000 a season in flat stakes, with a bank where a one-in-a-hundred run costs half
+of it:
+
+| price | true edge | stake | bankroll | return on bank | turnover/yr | seasons to proof |
+|---|---|---|---|---|---|---|
+| 1.5 | **+2%** | 250 | **25k** | **20.0%** | 250k | 4.9 |
+| 2.0 | **+2%** | 250 | **50k** | **10.0%** | 250k | 10.0 |
+| 3.0 | +2% | 250 | 100k | 5.0% | 250k | 20.2 |
+| 2.0 | +1% | 500 | 200k | 2.5% | 500k | 40 |
+| 2.0 | +0.5% | 1,000 | **800k** | **0.6%** | 1.0M | 160 |
+
+| true edge | verdict |
+|---|---|
+| **at or below +1%** | **Do not bet.** The bank is 4 to 36 times the annual profit, the return on it is 0.2-5%, and 20 to 3,200 seasons are needed to confirm it. You will never learn whether you had it. |
+| **+2%, price at or below 2.0, 1,000+ bets a year** | **Marginally viable.** A 25-50k bank returns 10-20% a year, proof in 5-10 seasons, worst normal drawdown 25-32% of bank. This is the boundary case — and the only one the market data says is on offer. |
+| **+2%, price 3.0 or longer** | **Not viable.** Twenty seasons to confirm, 5% or less on bank. |
+| **+5% or more** | Comfortable everywhere, and almost certainly not real: against a 2% best-price margin it means beating the close by 7%, where this repo's model loses to it by 9%. Treat it as measurement error until 1,500 bets say otherwise, and size it as +2% meanwhile. |
+
+A note on the repo's own tool. `trading_edge_requirements` reports ruin risk from the
+standard `a^(2/k - 1)`, which contains neither the edge nor the price — it is the
+**unbounded-horizon** limit, so it returns 50% / 12.5% / 0.8% for bank-halving at full,
+half and quarter Kelly no matter what you pass it. Simulation confirms the formula (50.6%
+at 100,000 bets against 50.0% predicted) and confirms that one season is far safer: 1.7%
+after 1,000 bets at +1% and price 2.0, 23.2% after 5,000. The tool now ships that horizon
+in the payload, because a number that alarming should not arrive without its timescale.
+
+## 9. What the three freedoms are actually worth
 
 **Any price** is the real lever, and the only one that is measurable. It recovers 5.3 of
 the 6.6 points of margin and leaves you at roughly break-even — closer to zero at the
@@ -234,9 +333,11 @@ model cannot do it (it loses to the market by 3%). Price dispersion cannot do it
 actively harmful, since 95.7% of what dispersion offers is taken back. The consensus
 already knows what the best quote knows.
 
-**Whatever stake you like** is worth nothing without the first two, and is dangerous with
-an edge you have merely estimated. That is the subject of the staking section and of
-`trading_edge_requirements`.
+**Whatever stake you like** is worth nothing without the first two, and is actively
+destructive with an edge you have merely estimated: a genuine +2% edge, sized full Kelly on
+a 200-bet measurement of itself, loses 18.6 basis points a bet and halves the bank 62.5% of
+the time — worse than never betting. Quarter Kelly or flatter, on a bank of 100 to 250
+units, sized on a shrunk estimate rather than a point estimate.
 
 Anything built on top of the best price must generate **1.3 points** of genuine selection
 skill before the first unit of profit, and **2.3 points** before it can absorb one point

@@ -39,6 +39,25 @@ would be worth to bet at any price, only when you choose, at any stake.
 - **Streaks match chance.** Longest observed winning run 7 against a chance median
   of 9; P(chance >= observed) = 0.999. The useful number is the longest losing run,
   29, which is what a bankroll has to survive.
+- **Staking: a real edge, over-bet on a noisy estimate, is worse than no bet.** A
+  genuine +2% edge at price 2.0, sized full Kelly on a 200-bet measurement of itself,
+  returns -18.6 bp per bet and halves the bank 62.5% of the time over 1,000 bets;
+  not betting leaves you at 1.000. Staking half of Kelly and 1.5x Kelly give identical
+  growth, but only one also multiplies the drawdown. A 200-bet record at price 2.0
+  justifies staking 7.4% of its own point estimate.
+- **What it would take.** A +2% edge is marginally viable at price 2.0 or shorter with
+  1,000+ bets a year (25-50k bank, 10-20% on bank, 5-10 seasons to prove). At +1% or
+  below, at any price and any frequency, the bankroll is 4 to 36 times the annual
+  profit and the exercise is strictly worse than doing nothing.
+
+### Changed
+
+- `trading_edge_requirements` now returns `ruin_risk_horizon`. Its ruin figures come
+  from the standard `a^(2/k - 1)`, which contains neither the edge nor the price
+  because it is an unbounded-horizon limit — so it returns 50% / 12.5% / 0.8% for
+  bank-halving whatever you pass it. Simulation confirms the formula (50.6% at 100,000
+  bets) and confirms one season is far safer (1.7% after 1,000 bets at +1% and price
+  2.0). The horizon now ships with the number.
 
 ### Added — `trading_` provider (11 tools, no API key)
 

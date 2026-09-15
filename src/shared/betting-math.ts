@@ -789,8 +789,18 @@ export interface EdgeRequirements {
   /** Bets needed before the claimed edge is distinguishable from zero. */
   bets_to_prove: { one_sigma: number; two_sigma: number; three_sigma: number };
   kelly: { full_pct: number; quarter_pct: number };
-  /** Probability of the bankroll ever falling to a fraction of its start. */
+  /**
+   * Probability of the bankroll EVER falling to a fraction of its start, over an
+   * unbounded horizon. It is the classic diffusion result, so it depends only on
+   * the Kelly fraction — not on the edge or the price — and it is the ceiling,
+   * not what one season looks like. Simulation puts full Kelly on a +1% edge at
+   * price 2.0 at 1.7% after 1,000 bets, 23% after 5,000 and 50% after 100,000.
+   * `ruin_risk_horizon` says this in the payload, since a number this alarming
+   * should not arrive without its timescale.
+   */
   ruin_risk: Array<{ drawdown_pct: number; full_kelly: number; half_kelly: number; quarter_kelly: number }>;
+  /** What horizon `ruin_risk` assumes, stated so it cannot be read as one season. */
+  ruin_risk_horizon: string;
   /** How long a losing run to expect over a season of this many bets. */
   expected_longest_losing_run: (bets: number) => number;
 }
@@ -825,6 +835,9 @@ export function edgeRequirements(
   const fullKelly = kelly(odds, required, commission);
   // Standard fractional-Kelly result: betting k times the Kelly stake, the
   // chance of the bank ever touching a fraction a of its start is a^(2/k - 1).
+  // Note what is NOT in that expression: the edge and the price. It is an
+  // unbounded-horizon limit, and over a real season the risk is far lower —
+  // which is why the horizon ships alongside the number.
   const ruinAt = (a: number, k: number) => Math.min(1, a ** (2 / k - 1));
 
   return {
@@ -835,6 +848,11 @@ export function edgeRequirements(
     required_hit_rate_pct: asPct(required),
     bets_to_prove: { one_sigma: betsFor(1), two_sigma: betsFor(2), three_sigma: betsFor(3) },
     kelly: { full_pct: asPct(fullKelly), quarter_pct: asPct(fullKelly / 4) },
+    ruin_risk_horizon:
+      "Unbounded horizon: the chance of ever touching this level if you keep betting forever. " +
+      "It depends only on the Kelly fraction, not on the edge or the price, and one season is far " +
+      "safer — simulated at full Kelly on a +1% edge at price 2.0, the chance of halving the bank " +
+      "is 1.7% after 1,000 bets, 23% after 5,000 and 50% only after 100,000.",
     ruin_risk: [0.5, 0.25, 0.1].map((a) => ({
       drawdown_pct: asPct(1 - a),
       full_kelly: asProb(ruinAt(a, 1)),

@@ -1051,6 +1051,21 @@ describe("what profitability requires", () => {
     assert.ok(edgeRequirements(6, 2).bets_to_prove.two_sigma > 5 * edgeRequirements(1.3, 2).bets_to_prove.two_sigma);
   });
 
+  it("ships the horizon with the ruin risk, because the number is a limit not a season", () => {
+    // The formula a^(2/k - 1) contains neither the edge nor the price, so the
+    // same 50% comes back for a 1% edge at 1.5 and an 8% edge at 10. That is
+    // correct for an unbounded horizon and wildly pessimistic for one season
+    // (simulated: 1.7% after 1,000 bets at +1%/2.0). Callers get told which.
+    const a = edgeRequirements(1.5, 1);
+    const b = edgeRequirements(10, 8);
+    const halving = (r) => r.ruin_risk.find((x) => x.drawdown_pct === 50).full_kelly;
+    close(halving(a), halving(b), 1e-9, "ruin risk ignores edge and price by construction");
+    for (const r of [a, b]) {
+      assert.ok(/unbounded horizon/i.test(r.ruin_risk_horizon), "the horizon is stated");
+      assert.ok(/1,000 bets/.test(r.ruin_risk_horizon), "and a one-season figure is given for scale");
+    }
+  });
+
   it("gives the textbook ruin risks for fractional Kelly", () => {
     const r = edgeRequirements(2, 5).ruin_risk.find((x) => x.drawdown_pct === 50);
     close(r.full_kelly, 0.5, 1e-6, "full Kelly halves the bank half the time");
