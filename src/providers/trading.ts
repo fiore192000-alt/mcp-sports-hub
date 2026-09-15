@@ -1042,7 +1042,7 @@ export function register(server: McpServer): void {
           odds: z.number().gt(1),
           stake: z.number().min(0).optional(),
         }).optional().describe("The bet you took, if any"),
-      })).min(1).max(300).describe("Predictions to score — the array trading_predict_fixtures returned"),
+      })).min(1).max(500).describe("Predictions to score — the array trading_predict_fixtures returned. The cap fits one league-season, which is the natural batch for a whole-season review."),
       season: z.string().regex(/^\d{4}$/).optional().describe("Season to look results up in (default: derived from each prediction's date)"),
       source: z.enum(["auto", "footballdata", "openfootball"]).optional().describe("Where to read results from (default auto). Use the same source the predictions came from — team names differ between them."),
       commission_pct: z.number().min(0).lt(100).optional().describe("Commission on winnings, % (default 0)"),

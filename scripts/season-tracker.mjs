@@ -8,7 +8,7 @@
  *   node scripts/season-tracker.mjs predict  --leagues I1,E0 [--days 10]
  *                                            [--supersede "why the old ones are wrong"]
  *   node scripts/season-tracker.mjs score    --leagues I1,E0
- *   node scripts/season-tracker.mjs hindcast --leagues I1 [--min-history 4]
+ *   node scripts/season-tracker.mjs hindcast --leagues I1,E0 [--seasons 2324,2425] [--min-history 4]
  *
  * Predictions are appended to predictions/<LEAGUE>-<SEASON>.json and are never
  * rewritten: a forecast you can edit after the result is not a forecast. New
@@ -136,47 +136,103 @@ async function score() {
 }
 
 /**
- * Walk-forward check on matches already played this season: rate each match
- * using only what was known before it, predict, then score. No lookahead, so
- * it answers "how would this model have done so far" honestly — the one
- * question you can ask before the next round is played.
+ * Walk-forward check on matches already played: rate each match using only
+ * what was known before it, predict, then score. No lookahead, so it answers
+ * "how would this model have done" honestly — across as many seasons and
+ * leagues as you point it at.
+ *
+ * Each league-season is trained on the season before it and scored on its own
+ * matches, then the summaries are pooled by match count. Pooling weighted
+ * means rather than re-deriving the metrics keeps one implementation of the
+ * maths, in the tool.
  */
 async function hindcast() {
   const minHistory = Number(flag("min-history", 4));
+  const seasons = (flag("seasons", null) ?? currentSeasonCode()).split(",").map((x) => x.trim()).filter(Boolean);
+  const { loadSeasons } = await import(dist("shared/football-source.js"));
+  const rowsOf = [];
+
   for (const league of leagues) {
-    const season = flag("season", currentSeasonCode());
-    const { loadSeasons } = await import(dist("shared/football-source.js"));
-    const previous = `${String((Number(season.slice(0, 2)) + 99) % 100).padStart(2, "0")}${season.slice(0, 2)}`;
-    const { played, notes } = await loadSeasons(league, [previous, season], source);
-    for (const note of notes) console.log(`note: ${note}`);
-    const rows = [];
-    const counts = new Map();
-    const historyPool = [];
-    for (const m of played) {
-      const ready = (counts.get(m.home) ?? 0) >= minHistory && (counts.get(m.away) ?? 0) >= minHistory;
-      // Only score the current season: the earlier one is what trains it.
-      if (ready && m.season === season) {
-        const fit = fitRatings(historyPool, { half_life_days: 240, as_of: m.ts });
-        const xg = expectedGoals(fit, m.home, m.away);
-        if (xg) {
-          const model = matchModel(xg.home, xg.away, { rho: -0.1 });
-          rows.push({
-            date: m.date, league, home: m.home, away: m.away,
-            prob_home: model.probabilities.home,
-            prob_draw: model.probabilities.draw,
-            prob_away: model.probabilities.away,
-          });
-        }
+    for (const season of seasons) {
+      const previous = `${String((Number(season.slice(0, 2)) + 99) % 100).padStart(2, "0")}${season.slice(0, 2)}`;
+      let played, notes;
+      try {
+        ({ played, notes } = await loadSeasons(league, [previous, season], source));
+      } catch (err) {
+        console.log(`${league} ${season}: skipped (${err.message.slice(0, 80)})`);
+        continue;
       }
-      historyPool.push({ home: m.home, away: m.away, homeGoals: m.homeGoals, awayGoals: m.awayGoals, ts: m.ts });
-      counts.set(m.home, (counts.get(m.home) ?? 0) + 1);
-      counts.set(m.away, (counts.get(m.away) ?? 0) + 1);
+      for (const note of notes) if (!/unreachable/.test(note)) console.log(`note: ${note}`);
+
+      const predictions = [];
+      const counts = new Map();
+      const pool = [];
+      for (const m of played) {
+        const ready = (counts.get(m.home) ?? 0) >= minHistory && (counts.get(m.away) ?? 0) >= minHistory;
+        if (ready && m.season === season) {
+          const fit = fitRatings(pool, { half_life_days: 240, as_of: m.ts });
+          const xg = expectedGoals(fit, m.home, m.away);
+          if (xg) {
+            const model = matchModel(xg.home, xg.away, { rho: -0.1 });
+            predictions.push({
+              date: m.date, league, home: m.home, away: m.away,
+              prob_home: model.probabilities.home,
+              prob_draw: model.probabilities.draw,
+              prob_away: model.probabilities.away,
+            });
+          }
+        }
+        pool.push({ home: m.home, away: m.away, homeGoals: m.homeGoals, awayGoals: m.awayGoals, ts: m.ts });
+        counts.set(m.home, (counts.get(m.home) ?? 0) + 1);
+        counts.set(m.away, (counts.get(m.away) ?? 0) + 1);
+      }
+      if (predictions.length === 0) {
+        console.log(`${league} ${season}: nothing to score (needs the previous season for history)`);
+        continue;
+      }
+      const report = await call("trading_score_predictions", { predictions, season, source, sample: 0 });
+      rowsOf.push({ league, season, report });
+      const skill = 1 - report.probability_scores.rps / report.benchmarks.base_rates.rps;
+      console.log(
+        `${league} ${season}  n=${String(report.scored).padStart(4)}  ` +
+        `hit ${String(report.accuracy.hit_rate_pct).padStart(6)}%  ` +
+        `RPS ${report.probability_scores.rps.toFixed(4)}  base ${report.benchmarks.base_rates.rps.toFixed(4)}  ` +
+        `skill ${(skill * 100).toFixed(1)}%`,
+      );
     }
-    if (rows.length === 0) {
-      console.log(`\n=== ${league} ${season} — too few matches played to hindcast (need both sides to have ${minHistory}) ===`);
-      continue;
+  }
+
+  if (rowsOf.length === 0) { console.log("nothing hindcast"); return; }
+  if (rowsOf.length === 1) { render(`${rowsOf[0].league} ${rowsOf[0].season}`, rowsOf[0].report); return; }
+
+  // Pool by match count.
+  const total = rowsOf.reduce((n, r) => n + r.report.scored, 0);
+  const weighted = (get) => rowsOf.reduce((n, r) => n + get(r.report) * r.report.scored, 0) / total;
+  const buckets = new Map();
+  for (const { report } of rowsOf) {
+    for (const b of report.calibration) {
+      const acc = buckets.get(b.predicted_range) ?? { n: 0, predicted: 0, observed: 0 };
+      acc.n += b.predictions;
+      acc.predicted += (b.average_predicted_pct / 100) * b.predictions;
+      acc.observed += (b.actual_pct / 100) * b.predictions;
+      buckets.set(b.predicted_range, acc);
     }
-    render(`${league} ${season} — walk-forward hindcast on ${rows.length} played match(es)`, await call("trading_score_predictions", { predictions: rows, season, source, sample: 60 }));
+  }
+  const rps = weighted((r) => r.probability_scores.rps);
+  const base = weighted((r) => r.benchmarks.base_rates.rps);
+  const worst = [...rowsOf].sort((a, b) =>
+    (1 - a.report.probability_scores.rps / a.report.benchmarks.base_rates.rps) -
+    (1 - b.report.probability_scores.rps / b.report.benchmarks.base_rates.rps))[0];
+
+  console.log(`\n=== pooled over ${rowsOf.length} league-seasons, ${total} matches ===`);
+  console.log(`hit rate ${(weighted((r) => r.accuracy.hit_rate_pct)).toFixed(2)}%`);
+  console.log(`RPS ${rps.toFixed(4)}  vs base rates ${base.toFixed(4)}  ->  skill ${((1 - rps / base) * 100).toFixed(1)}%`);
+  console.log(`Brier ${(weighted((r) => r.probability_scores.brier)).toFixed(4)}  log loss ${(weighted((r) => r.probability_scores.log_loss)).toFixed(4)}`);
+  console.log(`worst league-season: ${worst.league} ${worst.season} (skill ${((1 - worst.report.probability_scores.rps / worst.report.benchmarks.base_rates.rps) * 100).toFixed(1)}%)`);
+  console.log("calibration (predicted -> actual):");
+  for (const [range, b] of [...buckets.entries()].sort()) {
+    if (b.n < 30) continue;
+    console.log(`  ${range.padStart(8)}  n=${String(b.n).padStart(5)}  said ${(b.predicted / b.n * 100).toFixed(1)}%  happened ${(b.observed / b.n * 100).toFixed(1)}%`);
   }
 }
 

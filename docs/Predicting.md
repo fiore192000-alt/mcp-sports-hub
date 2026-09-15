@@ -37,8 +37,9 @@ rewritten — a forecast you can edit after the result is not a forecast. Each
 row records when it was made and which source it came from.
 
 `hindcast` is the one that answers "is this any good?" before the next round:
-it re-predicts every match already played this season using only what was
-known before each one, then scores it.
+it re-predicts every match already played using only what was known before each
+one, then scores it. Point it at more than one season with `--seasons` and it
+pools them. [Evaluation](Evaluation.md) is that sweep run over 19,062 matches.
 
 The point of the loop is the scoring. A model that is never scored against the
 market is entertainment.
