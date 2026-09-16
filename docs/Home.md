@@ -95,6 +95,7 @@ By default this loads the `free` preset (21 no-key providers, 185 tools) with ze
 - **[Thinking Like a Book](Thinking-Like-A-Book.md)** — How bookmakers price, why a 70% hit rate loses money, and the arithmetic of being profitable
 - **[The Price of the Best Price](The-Price-Of-The-Best-Price.md)** — What line shopping is really worth, why 95.7% of it is taken back, and how much of the rest is left in 2026
 - **[The Judge](The-Judge.md)** — The hypothesis ledger and the six gates a claimed edge has to survive, built to refuse before it is built to predict
+- **[Collecting](Collecting.md)** — What this machine can actually reach, and the append-only collector that records prices without interpreting them
 - **[Evaluation](Evaluation.md)** — The forecasting model measured over 19,062 real matches: skill, calibration, and what it still does not prove
 - **[Predicting](Predicting.md)** — Predict a round, score the predictions against the market, week after week
 - **[Providers](Providers.md)** — Detailed reference for all 44 providers with full tool lists

@@ -1,0 +1,120 @@
+# Collecting
+
+Two scripts, on the principle that you find out what is gatherable before
+deciding what to gather.
+
+## `npm run inventory` — what this machine can actually reach
+
+Probes every provider on one cheap endpoint and classifies it **LIVE**,
+**NEEDS_KEY**, **PARTIAL**, **BLOCKED** or **ERROR**.
+
+The distinction that matters is NEEDS_KEY against BLOCKED: one is a free signup
+away, the other cannot be solved from this machine at all. Getting it right took
+a correction. An egress proxy can answer `403` to the CONNECT itself, and that
+arrives looking exactly like an API saying "no key" — the first run of this
+script reported eleven providers as NEEDS_KEY that were nothing of the kind. The
+tell is a `text/plain` body reading *"Host not in allowlist: <host>. Add this
+host to your network egress settings to allow access."*, and the script now
+detects it.
+
+Run from this container, the honest answer is stark:
+
+| | Count |
+|---|---|
+| LIVE | **2** |
+| BLOCKED by egress policy | **32** |
+
+The two are `raw.githubusercontent.com` mirrors. Everything else — ESPN, the NHL
+and MLB APIs, Lichess, Sleeper, OpenLigaDB, all four odds providers, both
+Polymarket endpoints, and football-data.co.uk itself — is unreachable here, and
+no API key changes that.
+
+So: **a live collector cannot run in this environment.** Run it where those
+hosts are reachable, or add them to the environment's egress allowlist. The
+script prints the exact host list to paste.
+
+## `npm run collect` — the collector, deliberately stupid
+
+```bash
+npm run collect -- backfill --leagues E0,I1 --seasons 2425,2526
+npm run collect -- snapshot --leagues E0
+npm run collect -- status
+```
+
+It records what a price **was** at a moment. It does not decide whether that
+price is interesting, does not de-vig, does not compute an edge, does not rank
+anything. Every judgement made on the way in is a judgement that cannot later be
+re-made differently, and the whole value of the archive is that it can be
+re-read by a question nobody has asked yet.
+
+### Storage
+
+Append-only NDJSON under `data/collected/<stream>/<UTC day>.ndjson`. Never
+rewrites a line. NDJSON rather than Parquet because appending is the only write
+this thing does and it needs no dependency to do it — and DuckDB reads it
+directly:
+
+```sql
+SELECT venue, market, count(*), avg(price)
+FROM read_json_auto('data/collected/odds/*.ndjson')
+GROUP BY 1, 2;
+```
+
+Three streams:
+
+| Stream | Row |
+|---|---|
+| `odds` | `match_id, league, kickoff_date, home, away, source, venue, market, selection, price, available_stake, price_taken_at, observed_at, phase` |
+| `results` | `match_id, …, ft_home, ft_away, ht_home, ht_away, result, home_elo, away_elo` |
+| `collection_log` | every run, including the failures |
+
+That last stream is not bookkeeping. **A gap you cannot see is a gap you will
+silently read as an absence of events** — no price movement, no news, nothing
+happening — when in fact the collector was down.
+
+### `price_taken_at` is null in the backfill, on purpose
+
+The archive records a price but not when it was taken. Writing `observed_at`
+into that field would be indistinguishable, a year from now, from a timestamp
+that was real. So it stays null, and the gap is the argument for snapshotting:
+the open-to-close series is the one thing the research programme needs and the
+one thing no archive contains.
+
+### Backfill, measured
+
+```
+238,858 matches in the archive. Filtering to E0,I1 over 2425,2526.
+  E0      760 matches
+  I1      760 matches
+15,200 price observations, 1,520 results.
+```
+
+Ten observations per match: 1X2 and Over/Under 2.5, each at the market average
+and at the best of the panel. Source is the keyless
+[Club-Football-Match-Data](https://github.com/xgabora/Club-Football-Match-Data-2000-2025)
+mirror, 2000 to 2025, which also carries Elo.
+
+### Snapshot needs a key, and says so rather than looking healthy
+
+No keyless source publishes live prices with timestamps. Without
+`THE_ODDS_API_KEY` the snapshot command writes a `skipped` line to
+`collection_log` and explains that history can be backfilled but the
+open-to-close series cannot be built. It does not write an empty file and exit 0.
+
+## Match identity
+
+`matchId(league, date, home, away)` → `I1-2026-09-12-LAZIO-MILAN`. Built from
+things that do not change, so two sources spelling a club differently still land
+on the same row.
+
+Writing its test found a real bug. `String.normalize("NFD")` decomposes `é` into
+`e` plus a combining accent, which a non-ASCII strip then removes cleanly — but
+**`ø`, `ł`, `đ`, `æ` and `ß` are letters in their own right**, not a base plus a
+diacritic. NFD leaves them, the strip deletes them outright, and Bodø/Glimt
+forks from Bodo/Glimt into two clubs. Fixed with an explicit transliteration
+table, and asserted over Bodø, Łódź, Đjurgården, Fenerbahçe and Malmö.
+
+That bug is the whole case for the identity layer being built first rather than
+last: it produces no error, no warning and no crash. It just quietly makes every
+join downstream wrong, and wrong in a way that is not random — clubs with
+awkward names are not a random sample of clubs.

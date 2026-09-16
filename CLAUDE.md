@@ -240,6 +240,8 @@ src/shared/openfootball.ts   → Keyless GitHub-hosted results/calendar mirror (
 src/providers/*.ts           → One file per API, exports register(server)
 scripts/season-tracker.mjs   → CLI loop: predict a round, log it, score it (npm run track)
 scripts/research-budget.mjs  → Append-only multiple-testing ledger (npm run budget)
+scripts/source-inventory.mjs → Probe every provider, classify LIVE/NEEDS_KEY/BLOCKED (npm run inventory)
+scripts/collect.mjs          → Append-only NDJSON collector, no interpretation (npm run collect)
 src/shared/evidence.ts       → The judge: six gates, Bonferroni bar, shrinkage → evidence card
 scripts/verify-sources.mjs   → Live check that the upstream sources still parse (npm run verify:sources)
 scripts/tune-model.mjs       → Train/validation search over model parameters (npm run tune)

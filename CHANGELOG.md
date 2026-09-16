@@ -104,6 +104,39 @@ percentage edge by a standard error in units of stake and reported t = 249 for
 that claim. An independent measurement of the same rule had it at 2.43. Fixed,
 with a regression test pinning the band.
 
+### Added — collecting, before deciding what to collect
+
+New page: [docs/Collecting.md](docs/Collecting.md).
+
+- **`npm run inventory`** probes every provider on one cheap endpoint and
+  classifies it LIVE / NEEDS_KEY / PARTIAL / BLOCKED / ERROR. The distinction
+  that matters is NEEDS_KEY against BLOCKED — a free signup away, or unreachable
+  whatever you do. Its first run got that wrong: an egress proxy answers `403`
+  to the CONNECT itself, which is indistinguishable from an API saying "no key",
+  and eleven providers were reported as NEEDS_KEY that were nothing of the kind.
+  Now detected by the proxy's own `text/plain` body. From this container the
+  honest count is **2 LIVE, 32 BLOCKED**, both live ones being GitHub mirrors.
+- **`npm run collect`** is the collector, deliberately stupid: it records what a
+  price was at a moment and interprets nothing. Append-only NDJSON under
+  `data/collected/`, one file per stream per UTC day, read directly by DuckDB
+  with `read_json_auto`. Backfill pulls 1X2 and Over/Under 2.5 at both the
+  market average and the best of the panel — 15,200 price observations over
+  1,520 matches for two leagues and two seasons. Failures are written to a
+  `collection_log` stream, because a gap you cannot see is a gap you will
+  silently read as an absence of events.
+- `price_taken_at` stays **null** in backfilled rows. The archive records a
+  price but not when it was taken, and a timestamp invented here would be
+  indistinguishable later from one that was real.
+
+Writing the collector's identity test found a real bug. `normalize("NFD")`
+decomposes `é` into `e` plus a combining accent, which a non-ASCII strip removes
+cleanly — but `ø`, `ł`, `đ`, `æ` and `ß` are letters in their own right, so NFD
+leaves them and the strip deletes them outright, forking Bodø/Glimt from
+Bodo/Glimt into two clubs. Fixed with an explicit transliteration table and
+asserted over Bodø, Łódź, Đjurgården, Fenerbahçe and Malmö. It produced no
+error, no warning and no crash — it just made every downstream join wrong, and
+wrong non-randomly, since clubs with awkward names are not a random sample.
+
 ### Changed
 
 - `trading_edge_requirements` now returns `ruin_risk_horizon`. Its ruin figures come
