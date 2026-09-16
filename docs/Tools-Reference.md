@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete list of all **396 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
+Complete list of all **432 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
 
 ---
 
@@ -813,3 +813,81 @@ date: formatted YYYYMMDD
 | `highlightly_get_odds` | Get pre-match/live odds aggregated from 100+ bookmakers for a sport, by match or league. | **sport**, match_id?, league_id? |
 | `highlightly_get_head_to_head` | Get head-to-head history between two teams for a sport. | **sport**, **team_id_1**, **team_id_2** |
 
+---
+
+## Lumify (`lumify_`) — 14 tools
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `lumify_get_sports` | List sports and leagues Lumify covers (MLB, NFL, NBA, NHL, NCAAF, NCAAB, tennis, soccer). Returns the sport/league slugs used by other tools. | active_only? |
+| `lumify_get_seasons` | List seasons, optionally filtered by sport. Returns season IDs usable as season_id in lumify_get_events. | sport?, current_only? |
+| `lumify_get_events` | List events (schedules, live, and completed). Filter by sport, league, status, and date range. Returns event IDs needed by the odds/score/splits/intelligence tools. | sport?, league?, status?, date?, from?, to?, season_id?, team_id?, include_scores?, has_recommend?, sort?, after_id?, limit? |
+| `lumify_get_event` | Get a single event by ID, optionally inlining current odds and AI bet intelligence. | **event_id**, include_odds?, include_intelligence?, bookmaker? |
+| `lumify_get_event_score` | Get the current or final score for an event, including period/inning breakdown where available. | **event_id** |
+| `lumify_get_event_odds` | Get current betting odds (moneyline, spread, total) for an event from the requested bookmaker. | **event_id**, bookmaker? |
+| `lumify_get_odds_history` | Get line-movement history for an event — how the odds have moved over time for the requested bookmaker. | **event_id**, bookmaker?, limit? |
+| `lumify_get_betting_splits` | Get public betting splits for an event — the share of bets and handle on each side (money vs. tickets). | **event_id** |
+| `lumify_get_bet_intelligence` | Get Lumify AI bet intelligence for an event: confidence scores, detected signals, and a natural-language narrative explaining the recommendation. | **event_id**, bookmaker? |
+| `lumify_get_teams` | List or search teams. Filter by sport, league, conference, division, or country; search by name with q. | sport?, league?, conference?, division?, country?, q?, active?, after_id?, limit? |
+| `lumify_get_team` | Get a single team by ID. | **team_id** |
+| `lumify_get_players` | List or search players. Filter by sport, country, active/ranked status; search by name with q. | sport?, q?, country?, active?, ranked?, after_id?, limit? |
+| `lumify_get_player` | Get a single player by ID. | **player_id** |
+| `lumify_get_player_events` | List a player's events (past and upcoming). Filter by status and date range. | **player_id**, status?, from?, to?, after_id?, limit? |
+
+---
+
+## Trading Toolkit (`trading_`) — 15 tools
+
+Local computation — no API key. `trading_backtest` and `trading_team_ratings` read the keyless football-data.co.uk archive; the rest work entirely on numbers you pass in.
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `trading_list_strategies` | List the backtest strategies, staking modes and price sources available in trading_backtest, with the data caveats for each. Call this before trading_backtest if unsure which strategy to run. | _(none)_ |
+| `trading_devig_odds` | Remove the bookmaker margin from a complete market and return fair probabilities and fair odds. Feed it every outcome of one market (e.g. home/draw/away). Methods: multiplicative, additive, power, shin. | **odds**, names?, method?, compare_methods? |
+| `trading_evaluate_bet` | Score one or more selections against your own probabilities: edge, expected value per unit, fractional Kelly stake and a bet/no-bet verdict. Pair it with trading_devig_odds (fair probs from a sharp book) or trading_poisson_model (probs from a goals model). | **selections**, bankroll?, kelly_fraction?, max_stake_pct?, min_edge_pct?, commission_pct? |
+| `trading_find_arbitrage` | Check whether best prices from different bookmakers make a risk-free book, and split the stake so every outcome returns the same. Give it every outcome of one market, each at the best price you can actually get. | **outcomes**, total_stake?, commission_pct? |
+| `trading_hedge_position` | Close out an open back or lay position: the stake that locks the same profit whichever way the match goes (green-up), what a partial hedge leaves you with, and what happens if you let it ride. Handles exchange commission. | **side**, **stake**, **odds**, **hedge_odds**, hedge_stake?, commission_pct? |
+| `trading_poisson_model` | Price a football match from expected goals: 1X2, over/under, both-teams-to-score and correct score, as probabilities and fair odds. Optionally compare against market odds to get the edge on every outcome. Dixon-Coles low-score correction supported via rho. | **home_xg**, **away_xg**, rho?, market_odds?, commission_pct? |
+| `trading_team_ratings` | Fit attack/defence strengths for a league from football-data.co.uk results, and optionally price a fixture with them (Poisson) and compare to market odds. Attack/defence are relative to the league venue average: 1.0 = average, 1.3 = 30% better. | **league**, **season**, extra_seasons?, half_life_days?, prior_matches?, as_of?, home?, away?, rho?, market_odds? |
+| `trading_backtest` | Backtest a football betting strategy on real historical results and bookmaker odds (football-data.co.uk, 2000-now, 20+ leagues). Returns ROI, P&L, strike rate, max drawdown, closing-line value and per-season/per-league breakdowns. Use trading_list_strategies first to pick a strategy. | **strategy**, leagues?, seasons?, phase?, book?, min_odds?, max_odds?, edge_pct?, markets?, min_history?, half_life_days?, rho?, staking?, unit?, percent?, kelly_fraction?, max_stake_pct?, bankroll?, commission_pct?, sample_bets? |
+| `trading_closing_line_value` | Measure your bets against the closing line — the single best evidence that a betting process has an edge, ahead of P&L. Give it the price you took and the closing price for each bet; outcomes are optional. | **bets**, closing_margin_pct?, commission_pct? |
+| `trading_predict_fixtures` | Predict upcoming football fixtures: fits team ratings on the season so far, prices every match in the next few days (1X2, over/under), compares against the bookmakers' own prices and flags where the model disagrees enough to bet. Returns prediction rows you can feed straight back into trading_score_predictions once the matches are played. | leagues?, season?, include_previous_season?, half_life_days?, prior_matches?, rho?, book?, days_ahead?, min_edge_pct?, markets?, bankroll?, kelly_fraction?, max_stake_pct?, limit? |
+| `trading_score_predictions` | Score predictions you made earlier against what actually happened: hit rate, ranked probability score and log loss, measured against the bookmakers' own prices as the benchmark, plus calibration and the P&L and closing-line value of any picks. Feed it the `predictions` array from trading_predict_fixtures. | **predictions**, season?, commission_pct?, sample? |
+| `trading_price_market` | Turn fair probabilities into the odds a bookmaker would display, by adding a margin rather than removing one. The inverse of trading_devig_odds. Use it to see what your model's probabilities look like as posted prices, or to check how far a real book's prices sit from your own. | **probabilities**, names?, margin_pct?, method? |
+| `trading_edge_requirements` | The conditions a bet has to meet to make money, as arithmetic: the hit rate that breaks even, the hit rate your claimed edge implies, how many bets before that edge is distinguishable from luck, the Kelly stake, the risk of ruin at different staking speeds, and the losing run to expect anyway. Use it before trusting a record, and before sizing anything. | **odds**, edge_pct?, commission_pct?, bets_so_far? |
+
+---
+
+### `trading_audit_signal`
+Audit a claimed edge before betting it, against six gates: sample size, significance, the multiple-testing bar for the size of the search that found it, out-of-sample result, closing-line value, and survival of execution costs. Returns an evidence card with a status of **CANDIDATE**, **WATCH** or **NO SIGNAL**. Built to refuse — on honest inputs nothing measured in this repository has reached CANDIDATE.
+- **label** — what is being claimed
+- **odds** — typical decimal odds the signal fires at
+- **claimed_edge_pct** — the edge you believe you have, % of stake
+- **bets_observed** — settled bets the estimate rests on
+- `research_token?` — token from `npm run budget -- register`. Without one the multiple-testing gate stays shut and the claim cannot reach CANDIDATE
+- `hypotheses_tested?` — self-declared count, ignored when a valid token is given
+- `commission_pct?`, `execution_cost_pct?` — what the price actually costs you
+- `out_of_sample_bets?`, `out_of_sample_roi_pct?` — a period the signal was not chosen on
+- `clv_pct?` — closing-line value; positive means you beat the closing price
+- `prior_sd_pct?` — prior SD for shrinking the estimate (default 2)
+- `correction?` — `bonferroni` (default, bounds the chance of any false positive) or `fdr` (Benjamini-Hochberg, bounds the expected share of promoted findings that are false; reads the family p-values from the ledger)
+- `fdr_q?` — target false discovery rate (default 0.10)
+
+### `trading_testing_bar`
+The t-statistic a finding must clear once the search that produced it is charged for its own size, and how many bets that takes. Use it before mining: a swarm that generates hypotheses faster than it accumulates matches can never clear its own bar.
+- **hypotheses_tested** — how many hypotheses the search has consumed
+- `odds?` (default 2), `edge_pct?` (default 2), `alpha?` (default 0.05)
+
+## Polymarket (`polymarket_`) — 7 tools
+
+Prediction-market prices, for comparison against a bookmaker. Written from the public API shape; run `npm run verify:sources` before trusting the field mapping.
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `polymarket_get_markets` | List Polymarket prediction markets with their current prices, implied odds and liquidity. Prices are probabilities (0-1) set by traders, not by a bookmaker — the implied odds let you compare them directly against a sportsbook. | search?, limit?, closed?, order? |
+| `polymarket_get_market` | Get one Polymarket market by its slug or id, with outcome prices, implied odds, liquidity and the token ids needed to read its order book. | slug?, id? |
+| `polymarket_get_order_book` | Get the live order book for one outcome: the bids and asks with the size behind each. This is what a bookmaker never shows you — how much can actually be traded, and at what price it starts to move. | **token_id**, depth? |
+| `polymarket_compare_to_book` | Put a Polymarket price next to a bookmaker's on the same outcome: which venue is offering more, by how much, and whether the two disagree enough to back one side at each. The arbitrage check accounts for the exchange fee. | **polymarket_probability**, **bookmaker_odds**, bookmaker_odds_against?, fee_pct? |
+| `polymarket_explain` | What a prediction market changes about betting economics compared with a bookmaker, and what it does not. Read this before assuming a move to Polymarket carries an edge across. | _(none)_ |
+| `polymarket_get_trades` | The public trade tape for a market: every fill, its price, its size and which side took it. This is the closest thing to watching what the money is doing — a bookmaker shows you none of it. Use it to see whether a price moved on size or on a single small order. | market?, token_id?, limit? |
+| `polymarket_get_quote` | Midpoint, spread and last traded price for one outcome, in one call. A fuller read than the market snapshot: the midpoint is what the book thinks, the spread is what crossing it costs, and the last trade is what someone actually paid. | **token_id** |

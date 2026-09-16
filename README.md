@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Providers-41-orange" alt="41 Providers">
-  <img src="https://img.shields.io/badge/Tools-410-green" alt="410 Tools">
+  <img src="https://img.shields.io/badge/Providers-44-orange" alt="44 Providers">
+  <img src="https://img.shields.io/badge/Tools-432-green" alt="432 Tools">
   <a href="https://registry.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP_Registry-published-8B5CF6?logo=anthropic&logoColor=white" alt="MCP Registry"></a>
 </p>
 
@@ -25,7 +25,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
 </p>
 
-A unified MCP server that aggregates **42 sports API providers** into a single service. **410 tools** covering scores, stats, odds, esports, college sports, chess, motorsport, boxing, AFL, and more across 70+ sports.
+A unified MCP server that aggregates **44 sports API providers** into a single service. **432 tools** covering scores, stats, odds, esports, college sports, chess, motorsport, boxing, AFL, betting/trading maths, and more across 70+ sports.
 
 > Each provider works independently. You only need API keys for the providers you use. Missing keys don't block startup — tools return an error when called without their key.
 
@@ -73,9 +73,9 @@ Uses the **stdio transport** from the [MCP SDK](https://modelcontextprotocol.io)
 
 **Requirements**: Node.js 18+, npm.
 
-## Providers (32)
+## Providers (44)
 
-### Works instantly — no API key, no signup (19 providers, ~165 tools)
+### Works instantly — no API key, no signup (21 providers, 185 tools)
 
 These providers work out of the box. Just build and run.
 
@@ -85,7 +85,7 @@ These providers work out of the box. Just build and run.
 | `nhl_` | [NHL Web API](https://api-web.nhle.com/) | NHL | 13 | Undocumented but stable |
 | `mlb_` | [MLB Stats API](https://statsapi.mlb.com/) | MLB/MiLB | 13 | Official, undocumented |
 | `f1_` | [Jolpica F1](https://api.jolpi.ca/ergast/f1/) | Formula 1 (1950+) | 13 | Community-maintained |
-| `openf1_` | [OpenF1](https://openf1.org/) | F1 live telemetry | 12 | Live race weekends only |
+| `openf1_` | [OpenF1](https://openf1.org/) | F1 live telemetry | 13 | Live race weekends only |
 | `openliga_` | [OpenLigaDB](https://api.openligadb.de/) | German football | 10 | Bundesliga focus |
 | `sportsdb_` | [TheSportsDB](https://www.thesportsdb.com/) | 40+ sports | 13 | Test key auto, watermarks |
 | `ncaa_` | [NCAA API](https://github.com/henrygd/ncaa-api) | College sports | 8 | 5 req/s rate limit |
@@ -100,10 +100,12 @@ These providers work out of the box. Just build and run.
 | `sleeper_` | [Sleeper](https://docs.sleeper.com/) | NFL fantasy | 10 | ~1000 req/min |
 | `euroleague_` | [EuroLeague](https://www.euroleaguebasketball.net/) | EuroLeague + EuroCup basketball | 6 | Keyless feeds |
 | `footballdata_uk_` | [Football-Data.co.uk](https://www.football-data.co.uk/) | Historical football results + odds | 2 | CSV, 25+ leagues |
+| `polymarket_` | [Polymarket](https://polymarket.com/) | Prediction-market prices, order books, cross-venue comparison, trade tape | 7 | Keyless reads; written from the API shape, unverified |
+| `trading_` | Trading toolkit (local) | Betting maths + match prediction: de-vig and its inverse, EV/Kelly, arbitrage, hedging, Poisson model, fixture predictions, forecast scoring, backtest | 12 | Pure computation + the football-data.co.uk archive |
 
-> **Tip**: Use `SPORTS_HUB_PROVIDERS=free` to load only these 19 providers (~165 tools).
+> **Tip**: Use `SPORTS_HUB_PROVIDERS=free` to load only these 21 providers (185 tools).
 
-### Free tier with API key — signup required, no credit card (23 providers, ~245 tools)
+### Free tier with API key — signup required, no credit card (23 providers, 247 tools)
 
 Registration takes 1-2 minutes. All keys are free.
 
@@ -330,13 +332,13 @@ Or in `.claude/settings.json`:
 
 ## Provider Filtering
 
-By default, only the **free preset** is loaded (19 providers, ~165 tools — no API keys needed). Use `SPORTS_HUB_PROVIDERS` to change what's loaded:
+By default, only the **free preset** is loaded (21 providers, 185 tools — no API keys needed). Use `SPORTS_HUB_PROVIDERS` to change what's loaded:
 
 ```bash
 # Default — free providers only (no config needed)
 npx mcp-sports-hub
 
-# Load ALL 42 providers (410 tools)
+# Load ALL 44 providers (432 tools)
 SPORTS_HUB_PROVIDERS=all npx mcp-sports-hub
 
 # Use a preset
@@ -353,15 +355,16 @@ SPORTS_HUB_PROVIDERS=-sportsdata,-mma npx mcp-sports-hub
 
 | Preset | Providers | Tools | Needs keys? |
 |--------|-----------|-------|-------------|
-| `free` (default) | 19 no-key providers (espn, nhl, mlb, f1, openf1, openliga, sportsdb, ncaa, sportsrc, lichess, chesscom, squiggle, motogp, formulae, nascar, opendota, sleeper, euroleague, footballdatauk) | ~165 | No |
-| `all` | all 42 providers | 410 | Yes (for key-required providers) |
+| `free` (default) | 21 no-key providers (espn, nhl, mlb, f1, openf1, openliga, sportsdb, ncaa, sportsrc, lichess, chesscom, squiggle, motogp, formulae, nascar, opendota, sleeper, euroleague, footballdatauk, trading, polymarket) | 183 | No |
+| `all` | all 44 providers | 432 | Yes (for key-required providers) |
 | `chess` | lichess, chesscom | 14 | No |
 | `us-major` | espn, nhl, mlb, ncaa, cfbd, bdl, msf, nascar, sleeper | ~93 | Some |
-| `soccer` | espn, apifootball, footballdata, sportmonks, openliga, sportsrc, footballdatauk, highlightly | ~73 | Some |
+| `soccer` | espn, apifootball, footballdata, sportmonks, openliga, sportsrc, footballdatauk, highlightly, trading | 84 | Some |
 | `f1` | f1, openf1 | 25 | No |
 | `motorsport` | f1, openf1, motogp, formulae, nascar | ~42 | No |
 | `esports` | pandascore, opendota | 25 | Some |
-| `odds` | odds, oddsio, sgo, lumify | 43 | Yes |
+| `odds` | odds, oddsio, sgo, lumify, trading, polymarket | 63 | Some |
+| `trading` | trading, polymarket, footballdatauk, odds, oddsio, sgo, lumify, apifootball, footballdata | 89 | Some |
 | `cricket` | cricket, entitycricket | 22 | Yes |
 | `golf` | livegolf, golfcourse | 14 | Some |
 
@@ -417,8 +420,10 @@ Beyond tools, the server exposes:
 - `sportshub://presets` — all presets and the providers they load
 - `sportshub://provider/{key}` — details for one provider (with key autocompletion)
 
-**Prompts** (curated slash-command workflows over the 410 tools):
-- `whats-on-today` · `compare-odds {event}` · `motorsport-weekend {series}` · `league-standings {league}` · `team-deep-dive {team}` · `f1-race {season} {round}`
+**Prompts** (curated slash-command workflows over the 432 tools):
+- `whats-on-today` · `compare-odds {event}` · `motorsport-weekend {series}` · `league-standings {league}` · `team-deep-dive {team}` · `f1-race {season} {round}` · `build-football-trade {match} {bankroll}` · `backtest-football-strategy {idea} {leagues}` · `predict-and-track {leagues} {season}`
+
+The model is measured over 19,062 real matches in [docs/Evaluation.md](docs/Evaluation.md), which also records what failed to improve it. Bookmaker odds are the missing input: run `npm run fetch:archive` (a GitHub mirror, no key, works behind a blocked network) or drop football-data.co.uk's own CSVs into [`data/football-data/`](data/football-data/README.md) for the closing line too. Where the data comes from and what each source lacks: [docs/Data-Sources.md](docs/Data-Sources.md). The predict → save → score loop is written up in [docs/Predicting.md](docs/Predicting.md), and runs from a shell with `npm run track -- predict --leagues I1`. It works with no API key: if the odds archive is unreachable it falls back to a keyless GitHub-hosted results mirror, losing the market benchmark but keeping the forecasts and their scoring. `npm run verify:sources` checks that both sources are still reachable, still parse, and still agree with an independent mirror of the same seasons.
 
 All tools are annotated `readOnly` / `idempotent` so clients can skip confirmation prompts.
 
@@ -426,7 +431,7 @@ All tools are annotated `readOnly` / `idempotent` so clients can skip confirmati
 
 ```
 src/
-├── index.ts                    # Imports + registers all 42 providers; transports
+├── index.ts                    # Imports + registers all 44 providers; transports
 ├── shared/
 │   ├── http.ts                 # fetchJson, fetchText, buildUrl, toolResult, errorResult
 │   │                           #   + retry/backoff, coalescing, keyed cache
@@ -435,6 +440,10 @@ src/
 │   ├── tool-pipeline.ts        # central `fields` param, size cap, empty-result hints
 │   ├── projection.ts           # field projection used by the pipeline
 │   ├── slim.ts                 # strips $schema boilerplate from tools/list
+│   ├── betting-math.ts         # de-vig, EV/Kelly, arbitrage, hedging, Poisson, team ratings
+│   ├── football-source.ts      # source resolution: odds archive first, keyless mirror as fallback
+│   ├── openfootball.ts         # keyless GitHub-hosted results/calendar mirror (no odds)
+│   ├── football-csv.ts         # football-data.co.uk archive: parsing + odds columns
 │   ├── resources.ts            # MCP resources (provider/preset catalogs)
 │   └── prompts.ts              # MCP prompts (curated workflows)
 └── providers/
@@ -478,6 +487,8 @@ src/
     ├── sleeper.ts              #  10 tools — no key
     ├── euroleague.ts           #   6 tools — no key
     ├── football-data-uk.ts     #   2 tools — no key (CSV)
+    ├── polymarket.ts           #   7 tools — no key (prediction market)
+    ├── trading.ts              #  15 tools — no key (local maths + CSV archive)
     ├── boxing.ts               #   8 tools — BOXING_DATA_API_KEY
     └── highlightly.ts          #   6 tools — HIGHLIGHTLY_API_KEY
 ```

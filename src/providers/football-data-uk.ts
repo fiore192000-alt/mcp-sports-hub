@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { fetchText, pathSegment, safe, toolResult } from "../shared/http.js";
+import { safe, toolResult } from "../shared/http.js";
+import { FD_LEAGUES as LEAGUES, fetchLeagueSeason } from "../shared/football-csv.js";
 
 // ---------------------------------------------------------------------------
 // Football-Data.co.uk — 2 tools
@@ -11,50 +12,6 @@ import { fetchText, pathSegment, safe, toolResult } from "../shared/http.js";
 // URL pattern: /mmz4281/{season}/{league}.csv  (season = 4 digits, e.g. 2425).
 // Column meanings: https://www.football-data.co.uk/notes.txt
 // ---------------------------------------------------------------------------
-
-const BASE = "https://www.football-data.co.uk";
-
-// Main-division league codes (see notes.txt for the full list).
-const LEAGUES: Record<string, string> = {
-  E0: "England — Premier League", E1: "England — Championship", E2: "England — League One",
-  E3: "England — League Two", EC: "England — National League",
-  SC0: "Scotland — Premiership", SC1: "Scotland — Championship", SC2: "Scotland — League One", SC3: "Scotland — League Two",
-  D1: "Germany — Bundesliga", D2: "Germany — 2. Bundesliga",
-  I1: "Italy — Serie A", I2: "Italy — Serie B",
-  SP1: "Spain — La Liga", SP2: "Spain — La Liga 2",
-  F1: "France — Ligue 1", F2: "France — Ligue 2",
-  N1: "Netherlands — Eredivisie", B1: "Belgium — Pro League", P1: "Portugal — Primeira Liga",
-  T1: "Turkey — Süper Lig", G1: "Greece — Super League",
-};
-
-// Minimal RFC-4180-ish CSV parser (handles quoted fields and CRLF).
-function parseCsv(text: string): Array<Record<string, string>> {
-  const rows: string[][] = [];
-  let field = "", row: string[] = [], inQuotes = false;
-  const t = text.replace(/^﻿/, "");
-  for (let i = 0; i < t.length; i++) {
-    const c = t[i];
-    if (inQuotes) {
-      if (c === '"') { if (t[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
-      else field += c;
-    } else if (c === '"') inQuotes = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else if (c !== "\r") field += c;
-  }
-  if (field.length > 0 || row.length > 1) { row.push(field); rows.push(row); }
-  if (rows.length === 0) return [];
-  const headers = rows[0].map((h) => h.trim());
-  const out: Array<Record<string, string>> = [];
-  for (let r = 1; r < rows.length; r++) {
-    const vals = rows[r];
-    if (vals.every((v) => v.trim() === "")) continue;
-    const obj: Record<string, string> = {};
-    headers.forEach((h, i) => { if (h && vals[i] !== undefined && vals[i] !== "") obj[h] = vals[i]; });
-    if (Object.keys(obj).length) out.push(obj);
-  }
-  return out;
-}
 
 export function register(server: McpServer): void {
   // 1. list leagues — static reference of available league codes
@@ -83,11 +40,7 @@ export function register(server: McpServer): void {
     },
     safe(async ({ league, season, team, limit }) => {
       const code = league.toUpperCase();
-      const csv = await fetchText(
-        `${BASE}/mmz4281/${pathSegment(season)}/${pathSegment(code)}.csv`,
-        { cacheTtl: 3600 }, // historical data — cache an hour
-      );
-      let rows = parseCsv(csv);
+      let rows = await fetchLeagueSeason(code, season);
       if (team) {
         const q = team.toLowerCase();
         rows = rows.filter((r) => (r.HomeTeam || "").toLowerCase().includes(q) || (r.AwayTeam || "").toLowerCase().includes(q));

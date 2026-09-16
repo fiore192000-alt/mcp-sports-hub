@@ -115,6 +115,17 @@ const TEST_CASES = {
     { tool: "footballdata_uk_list_leagues", args: {} },
     { tool: "footballdata_uk_get_matches", args: { league: "E0", season: "2425", limit: 5 } },
   ],
+  "trading.js": [
+    // The first four are pure local computation — they pass with no network.
+    { tool: "trading_list_strategies", args: {} },
+    { tool: "trading_devig_odds", args: { odds: [2.1, 3.4, 3.6], names: ["Home", "Draw", "Away"], method: "shin" } },
+    { tool: "trading_poisson_model", args: { home_xg: 1.6, away_xg: 1.1, rho: -0.13, market_odds: { home: 2.2, draw: 3.4, away: 3.5 } } },
+    { tool: "trading_hedge_position", args: { side: "back", stake: 10, odds: 4.0, hedge_odds: 2.0, commission_pct: 2 } },
+    // These two read the football-data.co.uk archive.
+    { tool: "trading_team_ratings", args: { league: "E0", season: "2425", home: "Arsenal", away: "Chelsea" } },
+    { tool: "trading_backtest", args: { strategy: "home", leagues: "E0", seasons: "2425", sample_bets: 2 } },
+    { tool: "trading_predict_fixtures", args: { leagues: "E0", days_ahead: 14, limit: 5 } },
+  ],
 
   // ─── Key-required providers (skipped if env key missing) ─────────────────
   "boxing.js": [

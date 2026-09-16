@@ -1,0 +1,132 @@
+[
+  {
+    "id": 1,
+    "registered_at": "2026-09-16T09:35:45.946Z",
+    "hypothesis": "Flat strategy sweep: 7 strategies x 2 price sources",
+    "count": 14,
+    "scope": "19 leagues, 0506-2627, >1M bets",
+    "verdict": "rejected",
+    "note": "nothing positive in both periods",
+    "resolved_at": "2026-09-16T09:35:46.393Z"
+  },
+  {
+    "id": 2,
+    "registered_at": "2026-09-16T09:35:46.010Z",
+    "hypothesis": "Situational pattern mine",
+    "count": 606,
+    "scope": "19 leagues, train 0506-1819 / valid 1920-2627",
+    "verdict": "rejected",
+    "note": "6 survivors, all one idea, and the idea was the price not the pattern",
+    "resolved_at": "2026-09-16T09:35:46.443Z"
+  },
+  {
+    "id": 3,
+    "registered_at": "2026-09-16T09:35:46.055Z",
+    "hypothesis": "Dixon-Coles parameter search (npm run tune)",
+    "count": 48,
+    "scope": "decay, shrinkage, home advantage, rho",
+    "verdict": "rejected",
+    "note": "parameter search exhausted, no material gain",
+    "resolved_at": "2026-09-16T09:35:46.506Z"
+  },
+  {
+    "id": 4,
+    "registered_at": "2026-09-16T09:35:46.101Z",
+    "hypothesis": "Elo as an alternative model, and blending it into the market at every weight",
+    "count": 11,
+    "scope": null,
+    "verdict": "rejected",
+    "note": "Elo lands within 0.0001; optimal blend weight on the model is zero",
+    "resolved_at": "2026-09-16T09:35:46.549Z"
+  },
+  {
+    "id": 5,
+    "registered_at": "2026-09-16T09:35:46.145Z",
+    "hypothesis": "Selectivity threshold on de-vigged consensus: 3 de-vig methods x 8 thresholds, plus breakdowns",
+    "count": 184,
+    "scope": "145,552 matches, 19 divisions",
+    "verdict": "rejected",
+    "note": "largest validation t 0.93 against a bar of 3.08",
+    "resolved_at": "2026-09-16T09:35:46.592Z"
+  },
+  {
+    "id": 6,
+    "registered_at": "2026-09-16T09:35:46.190Z",
+    "hypothesis": "Pre-specified grid: division group x outcome x odds band",
+    "count": 28,
+    "scope": "144,465 matches",
+    "verdict": "rejected",
+    "note": "train-best cell +15.78% went to -11.56% out of sample",
+    "resolved_at": "2026-09-16T09:35:46.634Z"
+  },
+  {
+    "id": 7,
+    "registered_at": "2026-09-16T09:35:46.236Z",
+    "hypothesis": "Dispersion thresholds (Max/Avg - 1 >= d), no de-vig",
+    "count": 5,
+    "scope": null,
+    "verdict": "rejected",
+    "note": "monotonically negative; the outlier book is sharp",
+    "resolved_at": "2026-09-16T09:35:46.674Z"
+  },
+  {
+    "id": 8,
+    "registered_at": "2026-09-16T09:35:46.298Z",
+    "hypothesis": "Execution haircut ladder on the surviving short-favourite rule",
+    "count": 6,
+    "scope": null,
+    "verdict": "rejected",
+    "note": "dies between -5% and -10%; a 5% exchange commission is already half of it",
+    "resolved_at": "2026-09-16T09:35:46.721Z"
+  },
+  {
+    "id": 9,
+    "registered_at": "2026-09-16T09:35:46.348Z",
+    "hypothesis": "Season-phase split: is the model relatively better early in the season?",
+    "count": 5,
+    "scope": "8,069 validation matches",
+    "verdict": "rejected",
+    "note": "no trend across season phases; hypothesis dead",
+    "resolved_at": "2026-09-16T09:35:46.766Z"
+  },
+  {
+    "id": 10,
+    "registered_at": "2026-09-16T09:43:46.291Z",
+    "hypothesis": "Do steam moves above 5% on away favourites beat the closing line?",
+    "count": 1,
+    "scope": "test of the gate",
+    "verdict": null,
+    "note": null,
+    "resolved_at": null
+  },
+  {
+    "id": 11,
+    "registered_at": "2026-09-16T10:20:28.527Z",
+    "hypothesis": "Market structure family on open/close data: (A) best closing price by odds band x market = 12, (B) steam direction x threshold = 8, (C) Pinnacle vs market-average disagreement at open x threshold = 4, (D) Bet365 vs Pinnacle disagreement at open x threshold = 4",
+    "count": 28,
+    "scope": "12,459 matches, 5 leagues, 1920-2526; train 1920-2223, validation 2324-2526",
+    "verdict": null,
+    "note": null,
+    "resolved_at": null
+  },
+  {
+    "id": 12,
+    "registered_at": "2026-09-16T10:21:45.064Z",
+    "hypothesis": "Family B extension: same steam conditions but settled at the CLOSING price, which is the only executable form (buying at open on a selection that later shortened is look-ahead). direction x threshold x {at close} = 8",
+    "count": 8,
+    "scope": "same 12,459 matches",
+    "verdict": null,
+    "note": null,
+    "resolved_at": null
+  },
+  {
+    "id": 13,
+    "registered_at": "2026-09-16T10:52:25.063Z",
+    "hypothesis": "Bankroll race 2018-2026 from EUR 10,000: 10 selection rules x 3 price sources (market average / best of panel / best at close) x 3 staking schemes (flat 1%, flat 2%, quarter Kelly) = 90 specifications. Winner by final bankroll.",
+    "count": 90,
+    "scope": "seasons 1819-2627; 19 divisions on the Avg/Max archive, 5 leagues on the open/close archive",
+    "verdict": null,
+    "note": null,
+    "resolved_at": null
+  }
+]

@@ -1,6 +1,6 @@
 # Providers
 
-Sports Hub aggregates **41 independent sports API providers** into one MCP server. Each provider registers its own tools, all prefixed with the provider name to avoid collisions. **396 tools** total.
+Sports Hub aggregates **44 independent sports API providers** into one MCP server. Each provider registers its own tools, all prefixed with the provider name to avoid collisions. **432 tools** total.
 
 
 ---
@@ -78,7 +78,7 @@ Sports Hub aggregates **41 independent sports API providers** into one MCP serve
 | | |
 |---|---|
 | **Prefix** | `openf1_` |
-| **Tools** | 12 |
+| **Tools** | 13 |
 | **API Base** | `https://api.openf1.org/v1` |
 | **Auth** | None |
 | **Rate Limits** | Fair use |
@@ -700,3 +700,53 @@ Sports Hub aggregates **41 independent sports API providers** into one MCP serve
 
 **Caveats:** x-rapidapi-key header. Free Basic = 100 req/day, no credit card. Distinctive value: video highlight clips + pre-match predictions + odds from 100+ bookmakers.
 
+---
+
+## 42. Lumify
+
+| | |
+|---|---|
+| **Prefix** | `lumify_` |
+| **Tools** | 14 |
+| **API Base** | `https://api.lumify.ai` |
+| **Auth** | `LUMIFY_API_KEY` |
+| **Rate Limits** | Free trial key |
+| **Sports** | Odds, line movement, betting splits, AI bet analysis (8 sports) |
+
+**Tools:** `lumify_get_sports`, `lumify_get_seasons`, `lumify_get_events`, and 11 more — see [Tools Reference](Tools-Reference.md).
+
+---
+
+## 43. Trading Toolkit (local)
+
+| | |
+|---|---|
+| **Prefix** | `trading_` |
+| **Tools** | 12 |
+| **API Base** | None (local computation) + `https://www.football-data.co.uk` for backtests |
+| **Auth** | None |
+| **Rate Limits** | None for the maths; fair use on the CSV archive (capped at 20 files per backtest) |
+| **Sports** | Football/soccer betting and trading |
+
+**Tools:** `trading_list_strategies`, `trading_devig_odds`, `trading_evaluate_bet`, `trading_find_arbitrage`, `trading_hedge_position`, `trading_poisson_model`, `trading_team_ratings`, `trading_backtest`, `trading_closing_line_value`, `trading_predict_fixtures`, `trading_score_predictions`, `trading_price_market`, `trading_edge_requirements`
+
+**Caveats:** A backtest assumes you got the listed price on every qualifying match, with no stake limits and no line movement. Separate closing-odds columns only exist from season 2019/20 onward; earlier seasons fall back to the single published price and the result says so. Treat a profitable run as a hypothesis to confirm out-of-sample, not a signal.
+
+---
+
+## 44. Polymarket
+
+| | |
+|---|---|
+| **Prefix** | `polymarket_` |
+| **Tools** | 7 |
+| **API Base** | `https://gamma-api.polymarket.com` + `https://clob.polymarket.com` |
+| **Auth** | None for reading |
+| **Rate Limits** | Fair use |
+| **Sports** | Whatever the market lists — football coverage concentrates on big matches |
+
+**Tools:** `polymarket_get_markets`, `polymarket_get_market`, `polymarket_get_order_book`, `polymarket_compare_to_book`, `polymarket_get_trades`, `polymarket_get_quote`, `polymarket_explain`
+
+**Caveats:** Written from the public API shape and never called from the session that wrote it; run `npm run verify:sources` before trusting the field mapping. An exchange removes the bookmaker's margin and the account limits, but liquidity becomes the binding constraint, and the edge measured in [Evaluation](Evaluation.md) does not transfer — it is a disagreement between bookmakers, and this is a single venue.
+
+---

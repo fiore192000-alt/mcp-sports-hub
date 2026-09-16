@@ -12,3 +12,8 @@ video/
 
 # MCPB bundle build artifact (built from manifest.json via `npm run bundle`)
 *.mcpb
+
+# Football-data.co.uk CSVs are third-party data: keep the directory and its
+# README, leave redistribution of the files themselves to whoever downloads them.
+data/football-data/*/
+data/collected/

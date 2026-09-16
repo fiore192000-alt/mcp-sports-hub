@@ -32,7 +32,7 @@ describe("MCP resources & prompts", () => {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     registerPrompts(server);
     const prompts = server._registeredPrompts ?? {};
-    for (const name of ["whats-on-today", "compare-odds", "motorsport-weekend", "league-standings", "team-deep-dive", "f1-race"]) {
+    for (const name of ["whats-on-today", "compare-odds", "motorsport-weekend", "league-standings", "team-deep-dive", "f1-race", "build-football-trade", "backtest-football-strategy", "predict-and-track"]) {
       assert.ok(prompts[name], `prompt "${name}" should be registered`);
     }
   });
