@@ -98,5 +98,25 @@
     "verdict": null,
     "note": null,
     "resolved_at": null
+  },
+  {
+    "id": 11,
+    "registered_at": "2026-09-16T10:20:28.527Z",
+    "hypothesis": "Market structure family on open/close data: (A) best closing price by odds band x market = 12, (B) steam direction x threshold = 8, (C) Pinnacle vs market-average disagreement at open x threshold = 4, (D) Bet365 vs Pinnacle disagreement at open x threshold = 4",
+    "count": 28,
+    "scope": "12,459 matches, 5 leagues, 1920-2526; train 1920-2223, validation 2324-2526",
+    "verdict": null,
+    "note": null,
+    "resolved_at": null
+  },
+  {
+    "id": 12,
+    "registered_at": "2026-09-16T10:21:45.064Z",
+    "hypothesis": "Family B extension: same steam conditions but settled at the CLOSING price, which is the only executable form (buying at open on a selection that later shortened is look-ahead). direction x threshold x {at close} = 8",
+    "count": 8,
+    "scope": "same 12,459 matches",
+    "verdict": null,
+    "note": null,
+    "resolved_at": null
   }
 ]
