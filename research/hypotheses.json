@@ -118,5 +118,15 @@
     "verdict": null,
     "note": null,
     "resolved_at": null
+  },
+  {
+    "id": 13,
+    "registered_at": "2026-09-16T10:52:25.063Z",
+    "hypothesis": "Bankroll race 2018-2026 from EUR 10,000: 10 selection rules x 3 price sources (market average / best of panel / best at close) x 3 staking schemes (flat 1%, flat 2%, quarter Kelly) = 90 specifications. Winner by final bankroll.",
+    "count": 90,
+    "scope": "seasons 1819-2627; 19 divisions on the Avg/Max archive, 5 leagues on the open/close archive",
+    "verdict": null,
+    "note": null,
+    "resolved_at": null
   }
 ]
