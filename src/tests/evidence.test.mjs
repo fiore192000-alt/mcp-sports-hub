@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { auditSignal, bonferroniBar, normalQuantile, perBetSd } from "../../dist/shared/evidence.js";
+import {
+  auditSignal, benjaminiHochberg, bonferroniBar, normalQuantile, perBetSd, twoSidedP,
+} from "../../dist/shared/evidence.js";
+
+/** Deterministic uniform draws, so "null hypotheses" are reproducible. */
+const nulls = (n, seed) => { let s = seed; return Array.from({ length: n }, () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)); };
 
 /** A registration the ledger would have produced, for tests that need one. */
 const registered = (k, at = "2026-01-01T00:00:00.000Z") =>
@@ -196,5 +201,115 @@ describe("auditSignal", () => {
         assert.ok(card.reasons.length > 0, "a card always says why");
       }
     }
+  });
+});
+
+
+describe("twoSidedP", () => {
+  it("matches the exact normal tail to better than 2e-7", () => {
+    // Cross-checked against Python's statistics.NormalDist.
+    const exact = { 0.5: 6.170751e-1, 1.96: 4.999579e-2, 2.494: 1.263125e-2, 3: 2.699796e-3, 4.03: 5.577685e-5, 5: 5.733031e-7 };
+    for (const [t, e] of Object.entries(exact)) close(twoSidedP(Number(t)), e, 2e-7, `t=${t}`);
+  });
+
+  it("is symmetric, bounded and monotone in |t|", () => {
+    for (const t of [0.3, 1, 2.5, 6]) close(twoSidedP(t), twoSidedP(-t), 1e-12, "symmetry");
+    close(twoSidedP(0), 1, 1e-6, "no evidence is p=1");
+    let prev = 1;
+    for (let t = 0.1; t < 8; t += 0.1) {
+      const p = twoSidedP(t);
+      assert.ok(p <= prev + 1e-12 && p >= 0 && p <= 1, `not monotone or out of range at t=${t}`);
+      prev = p;
+    }
+  });
+});
+
+describe("benjaminiHochberg", () => {
+  it("promotes nothing when the family is all noise", () => {
+    const r = benjaminiHochberg(nulls(1000, 11), 0.1);
+    assert.equal(r.promoted, 0);
+    assert.equal(r.threshold, null);
+  });
+
+  it("does not rescue one modest finding buried in a large search", () => {
+    // This repo's own case: t = 2.49 is p = 0.0126, among 907 nulls. Neither
+    // correction promotes it, and that is the honest answer — FDR is less
+    // punishing in general, not a way round a weak result.
+    const family = [0.0126, ...nulls(907, 42)];
+    for (const q of [0.05, 0.1, 0.2]) assert.equal(benjaminiHochberg(family, q).promoted, 0, `q=${q}`);
+    assert.ok(twoSidedP(2.494) > 0.05 / (2 * 908), "nor does Bonferroni");
+  });
+
+  it("beats Bonferroni decisively once several moderately strong signals exist", () => {
+    const family = [...Array(50).fill(1e-4), ...nulls(858, 7)];
+    const bh = benjaminiHochberg(family, 0.1);
+    const bonferroni = family.filter((p) => p <= 0.05 / (2 * family.length)).length;
+    assert.ok(bh.promoted >= 50, `BH should find the 50, got ${bh.promoted}`);
+    assert.equal(bonferroni, 0, "Bonferroni finds none of them");
+  });
+
+  it("keeps false discoveries near q, which is the guarantee it actually makes", () => {
+    const trueSignals = 50;
+    const family = [...Array(trueSignals).fill(1e-4), ...nulls(858, 7)];
+    const bh = benjaminiHochberg(family, 0.1);
+    const falseDiscoveries = bh.promoted - trueSignals;
+    assert.ok(falseDiscoveries / bh.promoted <= 0.15, `false share ${(falseDiscoveries / bh.promoted).toFixed(3)} should sit near q=0.10`);
+  });
+
+  it("is monotone in q and handles the empty family", () => {
+    const family = [...Array(20).fill(1e-4), ...nulls(200, 3)];
+    let prev = -1;
+    for (const q of [0.01, 0.05, 0.1, 0.25, 0.5]) {
+      const n = benjaminiHochberg(family, q).promoted;
+      assert.ok(n >= prev, `promotions fell as q rose (q=${q})`);
+      prev = n;
+    }
+    const empty = benjaminiHochberg([], 0.1);
+    assert.equal(empty.m, 0);
+    assert.equal(empty.promoted, 0);
+    assert.equal(empty.threshold, null);
+  });
+
+  it("ignores values that are not probabilities rather than trusting them", () => {
+    const r = benjaminiHochberg([1e-6, NaN, -0.2, 1.4, Infinity, 0.5], 0.1);
+    assert.equal(r.m, 2, "only the two real p-values count");
+  });
+});
+
+describe("auditSignal under FDR", () => {
+  const base = {
+    label: "x", odds: 1.33, claimed_edge_pct: 1.85, bets_observed: 5766,
+    execution_cost_pct: 0, out_of_sample: { bets: 5766, roi_pct: 1.85 }, clv_pct: 0.5,
+    registration: registered(908),
+  };
+
+  it("refuses this repo's finding under FDR too, and says Bonferroni agrees", () => {
+    const card = auditSignal({ ...base, correction: "fdr", family_p_values: [0.0126, ...nulls(907, 42)] });
+    assert.equal(card.status, "WATCH");
+    assert.equal(card.correction, "fdr");
+    const g = card.gates.find((x) => x.gate === "multiple_tests");
+    assert.equal(g.passed, false);
+    assert.match(g.detail, /does not clear/, "the card should say Bonferroni agrees");
+  });
+
+  it("promotes the same claim when the family says it is one of many real ones", () => {
+    const card = auditSignal({ ...base, correction: "fdr", family_p_values: [...Array(60).fill(1e-4), 0.0126, ...nulls(847, 7)] });
+    assert.equal(card.gates.find((x) => x.gate === "multiple_tests").passed, false, "0.0126 is still too weak even in good company");
+    const strong = auditSignal({ ...base, claimed_edge_pct: 4, correction: "fdr", family_p_values: [...Array(60).fill(1e-4), ...nulls(847, 7)] });
+    assert.ok(strong.p_value < 1e-4, "a 4% edge over 5766 bets at 1.33 is a strong result");
+    assert.equal(strong.status, "CANDIDATE");
+  });
+
+  it("refuses to pass on FDR when no family was supplied, rather than passing by default", () => {
+    const card = auditSignal({ ...base, correction: "fdr", family_p_values: [] });
+    const g = card.gates.find((x) => x.gate === "multiple_tests");
+    assert.equal(g.passed, false);
+    assert.match(g.detail, /no family p-values were supplied/);
+  });
+
+  it("still needs a verified registration, whichever correction is asked for", () => {
+    const card = auditSignal({ ...base, registration: undefined, correction: "fdr", family_p_values: [...Array(60).fill(1e-9)] });
+    assert.equal(card.gates.find((x) => x.gate === "multiple_tests").passed, false);
+    assert.equal(card.hypotheses_source, "self-declared");
   });
 });

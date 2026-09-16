@@ -870,6 +870,8 @@ Audit a claimed edge before betting it, against six gates: sample size, signific
 - `out_of_sample_bets?`, `out_of_sample_roi_pct?` — a period the signal was not chosen on
 - `clv_pct?` — closing-line value; positive means you beat the closing price
 - `prior_sd_pct?` — prior SD for shrinking the estimate (default 2)
+- `correction?` — `bonferroni` (default, bounds the chance of any false positive) or `fdr` (Benjamini-Hochberg, bounds the expected share of promoted findings that are false; reads the family p-values from the ledger)
+- `fdr_q?` — target false discovery rate (default 0.10)
 
 ### `trading_testing_bar`
 The t-statistic a finding must clear once the search that produced it is charged for its own size, and how many bets that takes. Use it before mining: a swarm that generates hypotheses faster than it accumulates matches can never clear its own bar.

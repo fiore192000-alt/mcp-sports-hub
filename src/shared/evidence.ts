@@ -76,6 +76,51 @@ export function perBetSd(odds: number, edgePct: number, commission = 0): number 
   return eff * Math.sqrt(p * (1 - p));
 }
 
+/** Two-sided p-value for a z/t statistic, via the complementary error function. */
+export function twoSidedP(t: number): number {
+  const z = Math.abs(t);
+  // Abramowitz & Stegun 7.1.26 on erfc, accurate to ~1.5e-7 — ample here,
+  // where the input is a noisy ROI estimate rather than a physical constant.
+  const x = z / Math.SQRT2;
+  const tt = 1 / (1 + 0.3275911 * x);
+  const y = 1 - (((((1.061405429 * tt - 1.453152027) * tt) + 1.421413741) * tt - 0.284496736) * tt + 0.254829592) * tt * Math.exp(-x * x);
+  return Math.min(1, Math.max(0, 1 - y));
+}
+
+export interface FdrResult {
+  /** Largest p-value still promoted, or null when nothing is. */
+  threshold: number | null;
+  /** How many of the supplied p-values are promoted. */
+  promoted: number;
+  q: number;
+  m: number;
+}
+
+/**
+ * Benjamini-Hochberg.
+ *
+ * Bonferroni bounds the chance of ANY false positive, which is the right
+ * guarantee when you are about to stake money on one finding and the wrong one
+ * for a research programme: at 908 hypotheses it demands t >= 4.03, and a
+ * programme that keeps searching can end up unable to promote anything at all.
+ *
+ * FDR bounds the expected PROPORTION of promoted findings that are false. It is
+ * a weaker promise about each individual result and a far more useful one about
+ * a pipeline, which is why fields that test millions of hypotheses use it.
+ *
+ * It needs the p-values of the whole family, not just the one being judged —
+ * which is a real cost: it only works if failures were recorded as diligently
+ * as successes. `npm run budget -- resolve <id> --p <value>` is where they go.
+ */
+export function benjaminiHochberg(pValues: number[], q = 0.1): FdrResult {
+  const p = pValues.filter((x) => Number.isFinite(x) && x >= 0 && x <= 1).sort((a, b) => a - b);
+  const m = p.length;
+  if (m === 0) return { threshold: null, promoted: 0, q, m: 0 };
+  let k = 0;
+  for (let i = 0; i < m; i++) if (p[i] <= ((i + 1) / m) * q) k = i + 1;
+  return { threshold: k > 0 ? p[k - 1] : null, promoted: k, q, m };
+}
+
 export interface SignalClaim {
   /** What is being claimed, for the card. */
   label: string;
@@ -100,6 +145,16 @@ export interface SignalClaim {
    * self-declared, and a self-declared count is not a small one — it is an
    * unknown one, so the multiple-testing gate cannot pass.
    */
+  /**
+   * Which multiple-testing guarantee to hold the claim to. "bonferroni" (the
+   * default) bounds the chance of any false positive; "fdr" bounds the expected
+   * share of promoted findings that are false, and needs `family_p_values`.
+   */
+  correction?: "bonferroni" | "fdr";
+  /** Target false discovery rate when correction is "fdr" (default 0.10). */
+  fdr_q?: number;
+  /** p-values of every hypothesis in the family, failures included. */
+  family_p_values?: number[];
   registration?: {
     verified: boolean;
     reason?: string;
@@ -133,6 +188,11 @@ export interface EvidenceCard {
   hypotheses_source: "ledger" | "self-declared";
   registered_at?: string;
   bonferroni_bar: number;
+  /** Which guarantee the multiple-testing gate was held to. */
+  correction: "bonferroni" | "fdr";
+  p_value: number;
+  /** Populated when family p-values were supplied, whichever correction was used. */
+  fdr?: FdrResult;
   /** What the estimate justifies staking, once shrunk toward the prior. */
   shrinkage: { weight: number; shrunk_edge_pct: number; quarter_kelly_stake_pct: number };
   gates: Gate[];
@@ -150,6 +210,7 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
     label, odds, claimed_edge_pct: edge, bets_observed: n,
     commission_pct = 0, execution_cost_pct = 0,
     hypotheses_tested = 1, out_of_sample, clv_pct, prior_sd_pct = 2, registration,
+    correction = "bonferroni", fdr_q = 0.1, family_p_values,
   } = claim;
 
   const commission = commission_pct / 100;
@@ -185,6 +246,10 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
     ? kelly(odds, (1 + shrunk / 100) / netOdds(odds, commission), commission) / 4
     : 0;
 
+  const pValue = twoSidedP(t);
+  const fdr = benjaminiHochberg(family_p_values ?? [], fdr_q);
+  const fdrPasses = fdr.threshold !== null && pValue <= fdr.threshold;
+
   const gates: Gate[] = [
     {
       gate: "sample",
@@ -200,10 +265,14 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
     },
     {
       gate: "multiple_tests",
-      passed: registered && t >= bar,
-      detail: registered
-        ? `t = ${t.toFixed(2)} against ${bar.toFixed(2)}, the bar after charging the search for ${effectiveK} hypotheses — read from the ledger, where this was registered on ${registration?.registered_at?.slice(0, 10)}.`
-        : `t = ${t.toFixed(2)} against ${bar.toFixed(2)} on a self-declared count of ${hypotheses_tested}. ${registration?.reason ?? "No registration token supplied."} An undeclared search size is not a small one, it is an unknown one, so this gate stays shut.`,
+      passed: registered && (correction === "fdr" ? fdrPasses : t >= bar),
+      detail: !registered
+        ? `t = ${t.toFixed(2)} against ${bar.toFixed(2)} on a self-declared count of ${hypotheses_tested}. ${registration?.reason ?? "No registration token supplied."} An undeclared search size is not a small one, it is an unknown one, so this gate stays shut.`
+        : correction === "fdr"
+          ? fdr.m === 0
+            ? `FDR was asked for and no family p-values were supplied. It needs the whole family, failures included — record them with \`npm run budget -- resolve <id> --p <value>\`. Bonferroni would ask t >= ${bar.toFixed(2)} here.`
+            : `p = ${pValue.toExponential(2)} against a Benjamini-Hochberg threshold of ${fdr.threshold === null ? "nothing promoted" : fdr.threshold.toExponential(2)} at q = ${fdr_q}, over ${fdr.m} recorded hypotheses (${fdr.promoted} promoted). Bonferroni would ask t >= ${bar.toFixed(2)}, which this ${t >= bar ? "also clears" : "does not clear"}.`
+          : `t = ${t.toFixed(2)} against ${bar.toFixed(2)}, the bar after charging the search for ${effectiveK} hypotheses — read from the ledger, where this was registered on ${registration?.registered_at?.slice(0, 10)}.`,
     },
     {
       gate: "out_of_sample",
@@ -254,6 +323,9 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
     hypotheses_source: registered ? "ledger" : "self-declared",
     registered_at: registration?.registered_at,
     bonferroni_bar: Number(bar.toFixed(3)),
+    correction,
+    p_value: Number(pValue.toExponential(3)),
+    ...(fdr.m > 0 ? { fdr } : {}),
     shrinkage: {
       weight: Number(weight.toFixed(4)),
       shrunk_edge_pct: Number(shrunk.toFixed(3)),
@@ -262,6 +334,9 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
     gates,
     reasons,
     notes: [
+      correction === "fdr"
+        ? "FDR bounds the expected SHARE of promoted findings that are false, not the chance of any. It is the right guarantee for a research pipeline and the wrong one for a single bet you are about to size — and it only means anything if the failures were recorded as diligently as this success."
+        : `Bonferroni bounds the chance of any false positive at all. For a research programme that will follow candidates up rather than bet them, FDR is the less punishing and more appropriate guarantee — pass correction: "fdr" with the family's p-values.`,
       `The sample justifies staking ${(weight * 100).toFixed(1)}% of what the point estimate suggests. Kelly assumes you know the edge; you have measured it.`,
       "A real +2% edge at price 2.0, sized full Kelly on a 200-bet measurement of itself, returns -18.6 basis points a bet and halves the bank 62.5% of the time. Not betting leaves you whole.",
       status === "CANDIDATE"

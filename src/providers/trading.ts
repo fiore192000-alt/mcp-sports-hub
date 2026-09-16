@@ -14,7 +14,7 @@ import {
   applyMargin, edgeRequirements, type MarginMethod,
 } from "../shared/betting-math.js";
 import { auditSignal, bonferroniBar } from "../shared/evidence.js";
-import { consumed, readLedger, verifyToken } from "../shared/research-ledger.js";
+import { consumed, familyPValues, readLedger, verifyToken } from "../shared/research-ledger.js";
 
 // ---------------------------------------------------------------------------
 // Trading toolkit — 11 tools
@@ -1340,14 +1340,20 @@ export function register(server: McpServer): void {
       out_of_sample_roi_pct: z.number().optional().describe("ROI over those out-of-sample bets, %"),
       clv_pct: z.number().optional().describe("Closing-line value, %. Positive means you beat the closing price."),
       prior_sd_pct: z.number().gt(0).max(50).optional().describe("Prior SD for shrinking the estimate, percentage points (default 2 — the size of the best-price margin)"),
+      correction: z.enum(["bonferroni", "fdr"]).optional().describe('Multiple-testing guarantee (default "bonferroni"). "bonferroni" bounds the chance of ANY false positive — right before staking money on one finding. "fdr" bounds the expected SHARE of promoted findings that are false — right for a research pipeline, and far less punishing at large ledger sizes. FDR reads the family\'s p-values from the ledger, so it only works if failures were resolved with --p too.'),
+      fdr_q: z.number().gt(0).lt(1).optional().describe("Target false discovery rate when correction is fdr (default 0.10)"),
     },
     safe(async (a) => {
       const oos = a.out_of_sample_bets !== undefined && a.out_of_sample_roi_pct !== undefined
         ? { bets: a.out_of_sample_bets, roi_pct: a.out_of_sample_roi_pct }
         : undefined;
       const registration = a.research_token ? verifyToken(a.research_token, a.label) : undefined;
+      const rows = readLedger();
       const card = auditSignal({
         registration,
+        correction: a.correction,
+        fdr_q: a.fdr_q,
+        family_p_values: familyPValues(rows),
         label: a.label,
         odds: a.odds,
         claimed_edge_pct: a.claimed_edge_pct,
@@ -1361,7 +1367,11 @@ export function register(server: McpServer): void {
       });
       return toolResult({
         ...card,
-        ledger: { entries: readLedger().length, hypotheses_consumed: consumed(readLedger()) },
+        ledger: {
+          entries: rows.length,
+          hypotheses_consumed: consumed(rows),
+          entries_with_p_value: familyPValues(rows).length,
+        },
       });
     }),
   );

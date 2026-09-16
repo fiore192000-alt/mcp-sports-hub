@@ -3,7 +3,7 @@
  * The multiple-testing ledger.
  *
  *   npm run budget -- register "<hypothesis>" [--count N] [--scope "19 leagues, 0506-2627"]
- *   npm run budget -- resolve <id> --verdict validated|rejected [--note "..."]
+ *   npm run budget -- resolve <id> --verdict validated|rejected [--p 0.013] [--note "..."]
  *   npm run budget -- token <id>
  *   npm run budget -- status [--odds 2] [--edge 2]
  *
@@ -135,10 +135,22 @@ if (cmd === "resolve") {
   if (!row) { console.error(`No hypothesis #${id}.`); process.exit(1); }
   if (row.verdict) { console.error(`#${id} is already ${row.verdict}. The log is append-only; register a new hypothesis instead of rewriting this one.`); process.exit(1); }
   row.verdict = verdict;
+  const pRaw = flag("p", null);
+  if (pRaw !== null) {
+    const pv = Number(pRaw);
+    if (!(pv >= 0 && pv <= 1)) { console.error(`--p must be a probability in [0,1], got ${pRaw}`); process.exit(1); }
+    row.p_value = pv;
+  }
   row.note = flag("note", null);
   row.resolved_at = new Date().toISOString();
   save(rows);
-  console.log(`#${id} -> ${verdict}${row.note ? ` (${row.note})` : ""}`);
+  console.log(`#${id} -> ${verdict}${row.p_value !== undefined ? `  p=${row.p_value}` : ""}${row.note ? `  (${row.note})` : ""}`);
+  const withP = load().filter((r) => typeof r.p_value === "number").length;
+  if (row.p_value === undefined) {
+    console.log("No --p recorded. Without p-values the FDR route is unavailable and only Bonferroni applies, which at this ledger size is punishing.");
+  } else {
+    console.log(`${withP} of ${load().length} entries now carry a p-value.`);
+  }
   process.exit(0);
 }
 
@@ -160,6 +172,8 @@ if (cmd === "status" || cmd === undefined) {
   const validated = rows.filter((r) => r.verdict === "validated").length;
   const rejected = rows.filter((r) => r.verdict === "rejected").length;
   console.log(`  entries: validated ${validated}   rejected ${rejected}   open ${rows.length - validated - rejected}`);
+  const withP = rows.filter((r) => typeof r.p_value === "number").length;
+  console.log(`  ${withP} carry a p-value (Benjamini-Hochberg needs them, failures included)`);
   if (k === 0) {
     console.log("\nNothing registered yet. Register a hypothesis BEFORE you look at its result — that is the only thing that makes this count mean anything.");
     process.exit(0);

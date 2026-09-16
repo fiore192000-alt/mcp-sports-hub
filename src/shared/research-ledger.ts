@@ -28,6 +28,8 @@ export interface LedgerEntry {
   count?: number;
   scope?: string | null;
   verdict?: "validated" | "rejected" | null;
+  /** p-value recorded when the hypothesis was resolved. FDR needs these. */
+  p_value?: number | null;
   note?: string | null;
   resolved_at?: string | null;
 }
@@ -52,6 +54,15 @@ export function readLedger(): LedgerEntry[] {
 /** Hypotheses charged so far. A sweep registered once may count as many. */
 export function consumed(rows: LedgerEntry[]): number {
   return rows.reduce((n, r) => n + (Number.isInteger(r.count) && (r.count as number) > 0 ? r.count as number : 1), 0);
+}
+
+/**
+ * Every p-value recorded in the ledger. Benjamini-Hochberg needs the whole
+ * family — the failures above all, since an FDR computed only over the results
+ * somebody bothered to write down because they looked good is not an FDR.
+ */
+export function familyPValues(rows: LedgerEntry[]): number[] {
+  return rows.map((r) => r.p_value).filter((x): x is number => typeof x === "number" && x >= 0 && x <= 1);
 }
 
 /** Deterministic over the entry, so it cannot be produced without writing it down. */

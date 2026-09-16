@@ -72,6 +72,19 @@ noise.
   undeclared search size is not a small one, it is an unknown one. The token is
   a hash over the entry, so tampering with any field invalidates it, and a token
   pointed at an unrelated claim is refused by name.
+- **False discovery rate as an alternative to Bonferroni.** `correction: "fdr"`
+  with `fdr_q` holds a claim to Benjamini-Hochberg instead: the expected share
+  of promoted findings that are false, rather than the chance of any. It reads
+  the family's p-values from the ledger (`resolve --p`), and it is the right
+  guarantee for a research pipeline that would otherwise be unable to promote
+  anything at all as its search grows.
+
+  Measured, and the result is not the flattering one: over 908 hypotheses, one
+  finding at p = 0.0126 is promoted by neither correction, and it is still
+  promoted by neither when fifty identical ones are present. FDR only pays when
+  several signals are *already fairly strong* — at p = 1e-4 with 50 true
+  signals it promotes 58 where Bonferroni promotes none. So it is a better
+  guarantee to hold a programme to, not a way round a weak result.
 - **`npm run budget`** — an append-only multiple-testing ledger. A sweep costs
   what it tests (`--count 606`, not 1), entries are registered before the result
   is seen, and resolved entries cannot be rewritten. Seeded with the 907

@@ -162,6 +162,47 @@ full — and a real +2% edge at price 2.0, sized full Kelly on a 200-bet
 measurement of itself, returns −18.6 basis points a bet and halves the bank
 62.5% of the time. Not betting leaves you whole.
 
+## Which guarantee — and the honest limit of the escape route
+
+Bonferroni bounds the probability of **any** false positive. That is the right
+promise when you are about to size a bet on one finding, and the wrong one for a
+research programme: at 908 hypotheses it demands *t* ≥ 4.03, and a pipeline that
+keeps searching eventually cannot promote anything at all.
+
+Benjamini-Hochberg bounds the expected **share** of promoted findings that are
+false. It is a weaker promise about each result and a far more useful one about
+a pipeline, which is why fields testing millions of hypotheses use it rather
+than testing fewer things. `trading_audit_signal` takes `correction: "fdr"` with
+`fdr_q` (default 0.10), and reads the family's p-values from the ledger —
+`npm run budget -- resolve <id> --p <value>`.
+
+**It does not rescue this repo's finding, and it will not rescue most.** Measured
+over 908 hypotheses, with the rest drawn from the null:
+
+| True signals present | Their p | BH promotes at q = 0.10 | Bonferroni promotes |
+|---|---|---|---|
+| 1 | 0.0126 | **0** | 0 |
+| 50 | 0.0126 | **0** | 0 |
+| 50 | 1e-4 | **58** | **0** |
+| 50 | 1e-6 | 58 | 50 |
+| 100 | 1e-4 | **116** | **0** |
+
+Read the first two rows before the third. A modest finding buried in a large
+search fails under FDR as surely as under Bonferroni, and it still fails when
+there are fifty of it. FDR pays off only when the pipeline turns up **several
+signals that are already fairly strong** — at p = 1e-4 it finds 58 where
+Bonferroni finds none, with the false share sitting near the q it promised.
+
+So FDR is the right guarantee to *hold* a research programme to, and it is not a
+way round a weak result. The way round a weak result is a stronger one, which
+means more matches, not a gentler test. That is why the sequence is collectors
+first.
+
+One cost worth naming: FDR needs the p-values of the whole family, **failures
+included**. An FDR computed only over the results somebody bothered to write
+down because they looked good is not an FDR, it is a decoration. The ledger
+reports how many entries carry one, so the gap is visible.
+
 ## `trading_testing_bar`
 
 Use it *before* mining rather than after. It answers the question a research
