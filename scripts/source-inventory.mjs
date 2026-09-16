@@ -55,6 +55,9 @@ const SOURCES = [
   { prefix: "footballdata_uk", name: "Football-Data.co.uk (origin)", key: null, use: "ODDS open+close", url: "https://www.football-data.co.uk/mmz4281/2425/E0.csv" },
   { prefix: "fd-mirror", name: "football-data GitHub mirror", key: null, use: "ODDS avg+max", url: "https://raw.githubusercontent.com/datasets/football-datasets/main/datasets/premier-league/season-2425.csv" },
   { prefix: "openfootball", name: "openfootball/football.json", key: null, use: "fixtures,results", url: "https://raw.githubusercontent.com/openfootball/football.json/master/2024-25/en.1.json" },
+  { prefix: "cfmd-matches", name: "Club-Football-Match-Data (matches)", key: null, use: "ODDS avg+max, 38 divisions", url: "https://raw.githubusercontent.com/xgabora/Club-Football-Match-Data-2000-2025/main/data/Matches.csv" },
+  { prefix: "cfmd-elo", name: "Club-Football-Match-Data (Elo)", key: null, use: "strength time series", url: "https://raw.githubusercontent.com/xgabora/Club-Football-Match-Data-2000-2025/main/data/EloRatings.csv" },
+  { prefix: "fdcache", name: "footballcsv/cache.footballdata", key: null, use: "results only (odds stripped)", url: "https://raw.githubusercontent.com/footballcsv/cache.footballdata/master/2023-24/eng.1.csv" },
   { prefix: "clubelo", name: "ClubElo", key: null, use: "ratings", url: "http://api.clubelo.com/2024-08-15" },
 
   // --- key required: reachability is still worth knowing ---

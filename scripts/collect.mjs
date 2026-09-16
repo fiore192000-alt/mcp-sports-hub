@@ -111,7 +111,9 @@ export function parseCsv(text) {
   });
 }
 
-const ODDS_MIRROR = "https://raw.githubusercontent.com/xgabora/Club-Football-Match-Data-2000-2025/main/data/Matches.csv";
+const MIRROR_BASE = "https://raw.githubusercontent.com/xgabora/Club-Football-Match-Data-2000-2025/main/data";
+const ODDS_MIRROR = `${MIRROR_BASE}/Matches.csv`;
+const ELO_MIRROR = `${MIRROR_BASE}/EloRatings.csv`;
 
 /** Season code 2425 -> the Aug..May window it covers. */
 export function seasonWindow(code) {
@@ -196,6 +198,63 @@ async function backfill(leagues, seasons) {
 }
 
 /**
+ * Elo snapshots, twice a month since 2000, from the same keyless mirror.
+ *
+ * This is NOT a substitute for the price series. It carries no market, no
+ * liquidity and no closing line. What it does carry is the one thing the odds
+ * archive does not: a dated external opinion of team strength, so a match can
+ * be joined to what was known BEFORE it rather than to a season-long average.
+ */
+async function ratings() {
+  const now = new Date().toISOString();
+  let text;
+  try {
+    text = await getText(ELO_MIRROR);
+  } catch (err) {
+    logCollection({ stream: "ratings", status: "failed", error: err.message });
+    console.log(`FAILED — ${err.message}`);
+    process.exitCode = 1;
+    return;
+  }
+  const rows = parseCsv(text).map((r) => {
+    const o = {};
+    for (const [k, v] of Object.entries(r)) o[k.replace(/^"|"$/g, "")] = String(v ?? "").replace(/^"|"$/g, "");
+    return o;
+  });
+  const out = [];
+  for (const r of rows) {
+    const elo = Number(r.elo);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date ?? "") || !r.club || !Number.isFinite(elo)) continue;
+    out.push({
+      as_of: r.date, club: r.club, club_slug: teamSlug(r.club), country: r.country || null,
+      elo, source: "clubelo-via-mirror", observed_at: now,
+    });
+  }
+  write("ratings", out);
+  const dates = [...new Set(out.map((r) => r.as_of))].sort();
+  logCollection({ stream: "ratings", status: "ok", rows: out.length, first: dates[0], last: dates[dates.length - 1] });
+  console.log(`${out.length} rating snapshots, ${dates.length} distinct dates, ${dates[0]} to ${dates[dates.length - 1]}.`);
+  console.log(`${new Set(out.map((r) => r.club_slug)).size} distinct clubs after slugging.`);
+  console.log("This is a strength series, not a price series. It cannot stand in for the closing line.");
+}
+
+/**
+ * The rating as of the last snapshot STRICTLY BEFORE a date.
+ *
+ * Strictly, because a snapshot taken on the day of a match may already reflect
+ * it. Getting this wrong is not a rounding error — it is look-ahead, and it
+ * makes a model look prescient in backtest and useless in front of a bookmaker.
+ */
+export function ratingAsOf(snapshots, clubSlug, date) {
+  let best = null;
+  for (const s of snapshots) {
+    if (s.club_slug !== clubSlug || !(s.as_of < date)) continue;
+    if (best === null || s.as_of > best.as_of) best = s;
+  }
+  return best;
+}
+
+/**
  * Live snapshot. This is the stream the research programme actually needs and
  * the one no free keyless source provides, so it says so plainly rather than
  * writing an empty file and looking healthy.
@@ -266,14 +325,16 @@ function status() {
 // Only run the CLI when invoked as a script, so the helpers can be imported
 // and tested without the module collecting anything as a side effect.
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  if (cmd === "backfill") {
+  if (cmd === "ratings") {
+    await ratings();
+  } else if (cmd === "backfill") {
     await backfill(list(flag("leagues", "E0,I1,SP1,D1,F1")), list(flag("seasons", "2425,2526")));
   } else if (cmd === "snapshot") {
     await snapshot(list(flag("leagues", "E0")));
   } else if (cmd === "status" || cmd === undefined) {
     status();
   } else {
-    console.error(`Unknown command "${cmd}". Use backfill, snapshot or status.`);
+    console.error(`Unknown command "${cmd}". Use backfill, ratings, snapshot or status.`);
     process.exit(1);
   }
 }

@@ -101,6 +101,52 @@ No keyless source publishes live prices with timestamps. Without
 `collection_log` and explains that history can be backfilled but the
 open-to-close series cannot be built. It does not write an empty file and exit 0.
 
+## What replaces an API key, and what does not
+
+The snapshot stream needs an odds provider, and the honest search for a free
+substitute produced a mixed answer worth stating in full.
+
+**What was found.**
+
+| Source | What it gives | Verdict |
+|---|---|---|
+| `xgabora/Club-Football-Match-Data` — `Matches.csv` | 238,858 matches, 38 divisions, 2000 to **3 Sep 2026**, 1X2 and O/U 2.5 at market average and best of panel | the backfill's spine |
+| same repo — `EloRatings.csv` | **273,972 dated strength snapshots**, twice monthly, 629 dates, 2000-07-01 to 2026-09-01, 942 clubs | a real time series, now collected |
+| `footballcsv/cache.footballdata` | mirrors football-data.co.uk — but stripped to five columns, `Date, Team 1, FT, HT, Team 2` | **odds removed; useless here** |
+| `openfootball/football.json` | fixtures and results, keyless | already wired as the no-odds fallback |
+
+**What was not found, and is not findable.** No keyless source publishes a
+*price* time series: no closing line, no intraday movement, no liquidity. The
+one archive that has closing columns is football-data.co.uk itself, and its host
+is blocked from this environment. Every GitHub mirror of it that could be
+located either drops the odds entirely or republishes the pre-match price only.
+
+So the substitution is partial and should not be oversold: **an Elo series is
+not a price series.** It carries no market, no money and no closing line. What
+it does carry is the one thing the odds archive lacks — a dated external opinion
+of team strength, so a match can be joined to what was known *before* it rather
+than to a season-long average.
+
+### The point-in-time join, and why "strictly before" is load-bearing
+
+`ratingAsOf(snapshots, clubSlug, date)` returns the last snapshot **strictly
+earlier** than the date. Not "on or before" — a snapshot stamped the day of a
+match may already reflect it, and a model fed that looks prescient in backtest
+and useless in front of a bookmaker.
+
+Verified against real collected data:
+
+```
+joined 400/400 matches, 0 missing
+rows where the rating is dated on or after kickoff: 0
+cross-check vs the archive's own home_elo, n=500:  median |diff| 0.0, p90 1.3
+```
+
+That last line is the one that matters. The archive computes its own pre-match
+Elo column independently; reproducing it to a median difference of zero
+confirms the join semantics **and** the club slugging at once, from a direction
+that could have disagreed.
+
 ## Match identity
 
 `matchId(league, date, home, away)` → `I1-2026-09-12-LAZIO-MILAN`. Built from

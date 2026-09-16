@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { matchId, parseCsv, seasonWindow, teamSlug, write } from "../../scripts/collect.mjs";
+import { matchId, parseCsv, ratingAsOf, seasonWindow, teamSlug, write } from "../../scripts/collect.mjs";
 
 let dir, prev;
 before(() => {
@@ -112,5 +112,39 @@ describe("write", () => {
     const text = readFileSync(join(dir, "results", "2026-03-03.ndjson"), "utf8");
     assert.ok(text.endsWith("\n"), "a trailing newline keeps the next append on its own line");
     for (const line of text.split("\n").filter(Boolean)) assert.doesNotThrow(() => JSON.parse(line));
+  });
+});
+
+
+describe("ratingAsOf", () => {
+  const snaps = [
+    { club_slug: "ARSENA", as_of: "2024-08-01", elo: 1900 },
+    { club_slug: "ARSENA", as_of: "2024-08-15", elo: 1946 },
+    { club_slug: "ARSENA", as_of: "2024-09-01", elo: 1960 },
+    { club_slug: "CHELSE", as_of: "2024-08-15", elo: 1800 },
+  ];
+
+  it("takes the most recent snapshot before the date", () => {
+    assert.equal(ratingAsOf(snaps, "ARSENA", "2024-08-20").elo, 1946);
+    assert.equal(ratingAsOf(snaps, "ARSENA", "2024-08-10").elo, 1900);
+    assert.equal(ratingAsOf(snaps, "ARSENA", "2025-01-01").elo, 1960);
+  });
+
+  it("refuses a snapshot dated on the day of the match", () => {
+    // The gate against look-ahead. A snapshot stamped the same day may already
+    // reflect the result, and a model fed that looks prescient in backtest and
+    // useless in front of a bookmaker.
+    assert.equal(ratingAsOf(snaps, "ARSENA", "2024-08-15").elo, 1900, "must not take the same-day snapshot");
+    assert.equal(ratingAsOf(snaps, "ARSENA", "2024-08-01"), null, "nothing strictly earlier exists");
+  });
+
+  it("never returns another club's rating", () => {
+    assert.equal(ratingAsOf(snaps, "CHELSE", "2024-08-20").elo, 1800);
+    assert.equal(ratingAsOf(snaps, "SPURS", "2024-08-20"), null);
+  });
+
+  it("is unaffected by the order the snapshots arrive in", () => {
+    const shuffled = [...snaps].reverse();
+    assert.equal(ratingAsOf(shuffled, "ARSENA", "2024-08-20").elo, 1946);
   });
 });

@@ -124,6 +124,24 @@ New page: [docs/Collecting.md](docs/Collecting.md).
   1,520 matches for two leagues and two seasons. Failures are written to a
   `collection_log` stream, because a gap you cannot see is a gap you will
   silently read as an absence of events.
+- **A third stream, from a keyless source, in place of an API key.** The same
+  mirror publishes `EloRatings.csv`: 273,972 dated strength snapshots, twice
+  monthly, 629 distinct dates from 2000-07-01 to 2026-09-01, 942 clubs.
+  `npm run collect -- ratings` gathers it, and `ratingAsOf` joins a match to the
+  last snapshot **strictly before** kickoff — strictly, because a same-day
+  snapshot may already reflect the result, which is look-ahead rather than a
+  rounding error. Verified on collected data: 400/400 matches joined, zero rows
+  dated on or after kickoff, and a cross-check against the archive's own
+  independently computed pre-match Elo agreeing to a median difference of 0.0
+  and p90 of 1.3 — which confirms the join semantics and the club slugging at
+  once.
+
+  Stated plainly because it would be easy to oversell: **an Elo series is not a
+  price series.** No keyless source publishes closing lines, intraday movement
+  or liquidity. `footballcsv/cache.footballdata` mirrors football-data.co.uk but
+  strips it to five columns with the odds removed, and the origin host is
+  blocked. The snapshot stream still needs a key; what has been substituted is a
+  dated external opinion of strength, not the market.
 - `price_taken_at` stays **null** in backfilled rows. The archive records a
   price but not when it was taken, and a timestamp invented here would be
   indistinguishable later from one that was real.
