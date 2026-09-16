@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { matchId, parseCsv, ratingAsOf, seasonWindow, teamSlug, write } from "../../scripts/collect.mjs";
+import { CLOSING_COLUMNS, CLOSING_LEAGUES, matchId, parseCsv, ratingAsOf, seasonWindow, teamSlug, write } from "../../scripts/collect.mjs";
 
 let dir, prev;
 before(() => {
@@ -146,5 +146,43 @@ describe("ratingAsOf", () => {
   it("is unaffected by the order the snapshots arrive in", () => {
     const shuffled = [...snaps].reverse();
     assert.equal(ratingAsOf(shuffled, "ARSENA", "2024-08-20").elo, 1946);
+  });
+});
+
+
+describe("the closing-line column map", () => {
+  it("names a distinct opening and closing column for every price", () => {
+    for (const [venue, market, selection, open, close] of CLOSING_COLUMNS) {
+      assert.ok(open && close, `${venue}/${market}/${selection} is missing a column`);
+      assert.notEqual(open, close, `${venue}/${market}/${selection} maps both phases to ${open} — that would silently report zero movement`);
+    }
+  });
+
+  it("has no duplicate venue/market/selection, which would double-count a price", () => {
+    const seen = new Set();
+    for (const [v, m, sel] of CLOSING_COLUMNS) {
+      const k = `${v}|${m}|${sel}`;
+      assert.ok(!seen.has(k), `duplicate ${k}`);
+      seen.add(k);
+    }
+  });
+
+  it("uses no column twice across the whole map", () => {
+    const cols = CLOSING_COLUMNS.flatMap(([, , , o, c]) => [o, c]);
+    assert.equal(new Set(cols).size, cols.length, "a column reused in two places means one of them is wrong");
+  });
+
+  it("covers both markets at all four venues", () => {
+    for (const venue of ["bet365", "pinnacle", "best_of_panel", "market_average"]) {
+      const mine = CLOSING_COLUMNS.filter(([v]) => v === venue);
+      assert.deepEqual(mine.filter(([, m]) => m === "1X2").map(([, , s]) => s), ["HOME", "DRAW", "AWAY"], venue);
+      assert.deepEqual(mine.filter(([, m]) => m === "OU25").map(([, , s]) => s), ["OVER", "UNDER"], venue);
+    }
+    assert.equal(CLOSING_COLUMNS.length, 4 * 5, "four venues, five selections each");
+  });
+
+  it("maps only the five leagues the mirror actually carries", () => {
+    assert.deepEqual(Object.keys(CLOSING_LEAGUES).sort(), ["D1", "E0", "F1", "I1", "SP1"]);
+    for (const path of Object.values(CLOSING_LEAGUES)) assert.match(path, /^[a-z0-9-]+$/, `${path} is not a url path segment`);
   });
 });

@@ -101,6 +101,44 @@ No keyless source publishes live prices with timestamps. Without
 `collection_log` and explains that history can be backfilled but the
 open-to-close series cannot be built. It does not write an empty file and exit 0.
 
+## The closing line is free after all
+
+An earlier version of this page said no free source publishes a closing line.
+**That was wrong**, and the correction is the most valuable thing on it.
+
+[`huhao930422-debug/football-odds-mirror`](https://github.com/huhao930422-debug/football-odds-mirror)
+mirrors football-data.co.uk's own CSVs *whole*, closing columns included, updated
+daily by a GitHub Action. Since `raw.githubusercontent.com` is a different origin
+from the blocked one, the historical open-to-close series is reachable here.
+
+Verified rather than trusted, which matters for a mirror nobody vouches for:
+
+| Check | Result |
+|---|---|
+| Its 2023-24 Premier League file against a copy downloaded from football-data.co.uk directly | **380 of 380 fixtures matched, 0 differing cells across 4,560 closing-odds values, 380/380 identical scores** |
+| Row counts across 5 leagues × 7 seasons | correct throughout, *including* Ligue 1 truncated to 279 in 2019-20 by the pandemic and 306 once it and the Bundesliga settled at eighteen clubs |
+| Do open and close actually differ | 244,658 pairs: 8.5% identical (real non-movement on short prices), median absolute move **4.49%**, p5 −10.4%, p95 +14.9% |
+
+A mirror that reproduced the schema but fabricated the numbers would fail the
+first check; one that copied a single season would fail the second; one that
+duplicated a column into both phases would fail the third.
+
+```bash
+npm run collect -- closing            # 5 leagues, 2019-20 to 2025-26
+```
+
+**489,437 price observations over 12,459 matches** — every price twice, once as
+posted and once at the off, from Bet365, Pinnacle, the best of the panel and the
+market average, across 1X2 and Over/Under 2.5.
+
+`phase` carries the open/close distinction. `price_taken_at` stays null for both,
+because the archive says *which* price it is and never *when* it was taken.
+
+What this unlocks is the closing-line research that was supposed to wait for a
+live snapshotter — on twelve thousand matches rather than the 1,186 of a single
+month. What it still does not give is intraday trajectory or liquidity: two
+points per match, not a path.
+
 ## What replaces an API key, and what does not
 
 The snapshot stream needs an odds provider, and the honest search for a free

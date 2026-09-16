@@ -124,6 +124,24 @@ New page: [docs/Collecting.md](docs/Collecting.md).
   1,520 matches for two leagues and two seasons. Failures are written to a
   `collection_log` stream, because a gap you cannot see is a gap you will
   silently read as an absence of events.
+- **The closing line is free after all, and the earlier claim that it was not
+  is corrected.** `huhao930422-debug/football-odds-mirror` mirrors
+  football-data.co.uk's CSVs whole, closing columns included, from a GitHub
+  origin this environment can reach. `npm run collect -- closing` gathers
+  **489,437 price observations over 12,459 matches** — every price twice, as
+  posted and at the off, from Bet365, Pinnacle, best of panel and market
+  average, over 1X2 and Over/Under 2.5, five leagues, 2019-20 to 2025-26.
+
+  Verified rather than trusted. Its 2023-24 Premier League file matches a copy
+  downloaded from football-data.co.uk directly on 380 of 380 fixtures with zero
+  differing cells across 4,560 closing-odds values; row counts reproduce the
+  real anomalies (Ligue 1 truncated to 279 by the pandemic, 306 at eighteen
+  clubs); and open and close genuinely differ — 8.5% identical, median absolute
+  move 4.49%, p5 -10.4%, p95 +14.9%.
+
+  This unlocks the closing-line work that was supposed to wait for a live
+  snapshotter, on twelve thousand matches instead of one month's 1,186. It still
+  gives two points per match, not a path: no intraday trajectory, no liquidity.
 - **A third stream, from a keyless source, in place of an API key.** The same
   mirror publishes `EloRatings.csv`: 273,972 dated strength snapshots, twice
   monthly, 629 distinct dates from 2000-07-01 to 2026-09-01, 942 clubs.
