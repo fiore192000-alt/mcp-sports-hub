@@ -1,6 +1,6 @@
 # Providers
 
-Sports Hub aggregates **44 independent sports API providers** into one MCP server. Each provider registers its own tools, all prefixed with the provider name to avoid collisions. **430 tools** total.
+Sports Hub aggregates **44 independent sports API providers** into one MCP server. Each provider registers its own tools, all prefixed with the provider name to avoid collisions. **432 tools** total.
 
 
 ---

@@ -1,6 +1,6 @@
 # Sports Hub MCP Server
 
-Unified MCP server — 44 providers, 430 tools, one process.
+Unified MCP server — 44 providers, 432 tools, one process.
 Covers: NFL, NBA, EuroLeague, MLB, NHL, Soccer, F1, MotoGP, Formula E, NASCAR, Tennis, Cricket, MMA, Boxing, Golf, Esports, Rugby, Volleyball, Handball, College Sports, Chess, AFL, NFL fantasy, betting/trading maths, and more.
 Also exposes MCP **resources** (provider/preset catalogs at `sportshub://...`) and **prompts** (curated workflows like `whats-on-today`, `compare-odds`, `motorsport-weekend`).
 
@@ -9,7 +9,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 
 ## Provider Reference
 
-### No API key required (21 providers, 183 tools)
+### No API key required (21 providers, 185 tools)
 
 | Prefix | Provider | Coverage | Tools |
 |--------|----------|----------|-------|
@@ -33,7 +33,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 | `euroleague_` | EuroLeague Basketball | EuroLeague + EuroCup: games, clubs, boxscores, play-by-play | 6 |
 | `footballdata_uk_` | Football-Data.co.uk | Historical football results + bookmaker odds (CSV, 25+ leagues) | 2 |
 | `polymarket_` | Polymarket | Prediction-market prices, order books, trade tape, cross-venue price comparison | 7 |
-| `trading_` | Trading toolkit (local) | Betting maths + prediction: de-vig and its inverse, EV/Kelly, arbitrage, hedging, Poisson model, fixture predictions, forecast scoring, backtest, profitability requirements | 13 |
+| `trading_` | Trading toolkit (local) | Betting maths + prediction: de-vig and its inverse, EV/Kelly, arbitrage, hedging, Poisson model, fixture predictions, forecast scoring, backtest, profitability requirements, and an auditor that refuses a signal the evidence does not support | 15 |
 
 `sportsdb_` defaults to test key "3" (free, watermarked images). Set `THESPORTSDB_API_KEY` for a personal key.
 `sportsrc_` V1 endpoints are free with no key. V2 (xG, momentum, lineups) needs `SPORTSRC_API_KEY` and is currently NOT exposed.
@@ -80,6 +80,7 @@ Uses stdio transport — compatible with any LLM supporting the Model Context Pr
 **Building a football trade**: `trading_devig_odds` (fair price from a market), `trading_price_market` (the inverse: your probabilities as odds a book would post), `trading_poisson_model` / `trading_team_ratings` (own probabilities), `trading_evaluate_bet` (edge + Kelly stake), `trading_find_arbitrage`, `trading_hedge_position` (green-up / cash-out)
 **Un secondo mercato / prediction market**: `polymarket_get_markets`, `polymarket_get_order_book` (la profondita' che un book non mostra), `polymarket_compare_to_book` (quale venue paga di piu', e arbitraggio fra i due) — leggi `polymarket_explain` prima di assumere che un vantaggio trovato sui bookmaker si trasferisca
 **Is this bet even winnable**: `trading_edge_requirements` (break-even hit rate, bets needed to prove an edge, Kelly, risk of ruin) — see docs/Thinking-Like-A-Book.md
+**Before you bet a signal you found**: `trading_audit_signal` (six gates: sample, significance, multiple testing, out-of-sample, CLV, execution cost → CANDIDATE / WATCH / NO SIGNAL) and `trading_testing_bar` (what a search of N hypotheses costs in evidence). Keep the hypothesis count honest with `npm run budget -- register|resolve|status`. See docs/The-Judge.md — the repo's own best finding scores NO SIGNAL.
 **Testing a betting strategy**: `trading_backtest` (ROI, drawdown, CLV over 25 years of results + odds), `trading_list_strategies`, `trading_closing_line_value`
 **Predicting a round and tracking it**: `trading_predict_fixtures` (next fixtures priced against the market) → save the `predictions` array → `trading_score_predictions` after the matches (hit rate, RPS vs the market, calibration, P&L). From a shell: `npm run track -- predict|score|hindcast --leagues I1` keeps the log in `predictions/` for you.
 **Basketball (beyond NBA)**: `euroleague_get_games`, `euroleague_get_game_boxscore` (EuroLeague + EuroCup), `bdl_get_*` (NBA)
@@ -117,6 +118,7 @@ Providers without published limits (ESPN, NHL, MLB, F1, OpenF1, OpenLigaDB, Golf
 - **OpenDota** (`opendota_`): Keyless free tier ~60 req/min, 50k/mo. `opendota_search_players` is a slow DB query (20-30s).
 - **EuroLeague** (`euroleague_`): Keyless official feeds (JSON). Use competition `E` (EuroLeague) or `U` (EuroCup) + season start year. v1 XML feeds are not wrapped (JSON-only).
 - **Football-Data.co.uk** (`footballdata_uk_`): CSV parsed to JSON; historical (updated within days of each round), not live. Cryptic column codes — see https://www.football-data.co.uk/notes.txt.
+- **Judging a signal** (`trading_audit_signal`): built to refuse. It charges a claim for the size of the search that found it, so `hypotheses_tested` is the input that matters and the one people understate — `npm run budget` keeps an append-only count, seeded with the 907 hypotheses this repo has already spent (bar: t >= 4.03). On honest inputs nothing measured here reaches CANDIDATE, including the short-favourite rule that is the only thing positive in both periods.
 - **Trading** (`trading_`): Local computation, no API key and no quota — but `trading_backtest` and `trading_team_ratings` read the football-data.co.uk archive (one CSV per league-season, capped at 20 files per call). `trading_predict_fixtures` and `trading_score_predictions` take a `source`: `footballdata` (odds, ~a week of fixtures) or `openfootball` (keyless GitHub mirror, full season calendar, NO odds — so no market benchmark and no picks); `auto` prefers the first and falls back to the second, which is what keeps the loop working on a network that blocks the archive. Team names differ between the two sources, so predict and score with the same one. openfootball is not schema-stable — some matches carry `"score": [h,a]` instead of `{"ft":…}` (in Serie A 2025-26 that form is used for every 0-0), and some are never filled in at all; the loader reads both shapes and reports the holes as `data_quality`. `npm run verify:sources` checks both sources still parse and still agree with an independent mirror. Odds: `npm run fetch:archive` fills the local directory from a GitHub mirror of football-data.co.uk (38 divisions, 2000-now, market average and best price, no closing line) — which works where the original host does not. For the closing line, put football-data.co.uk CSVs in `data/football-data/<season>/<LEAGUE>.csv` (or set `SPORTS_HUB_DATA_DIR`) and they are read before the network, which is how the market benchmark, edges and backtests work on a machine that cannot reach the site. `trading_predict_fixtures` prices a fixture with ONE unrated side using a promoted-team prior (measured: identical accuracy on rated teams, 172 extra fixtures covered at RPS 0.191); `rate_promoted: false` turns it off. `npm run tune` is the train/validation harness — see docs/Evaluation.md for what it found, which was mostly that parameter search is exhausted. A backtest assumes you got the listed price on every qualifying match; treat a profitable run as a hypothesis to confirm out-of-sample, not a signal. Closing-odds columns only exist from season 2019/20 onward — earlier seasons fall back to the single published price and the result says so.
 - **Boxing** (`boxing_`): Via RapidAPI; free Basic plan is only **100 requests/month** — use sparingly.
 - **Highlightly** (`highlightly_`): Free Basic = 100 req/day. `sport` is part of the path (e.g. "football" = soccer). Standings need leagueId + season.
@@ -128,8 +130,8 @@ Providers without published limits (ESPN, NHL, MLB, F1, OpenF1, OpenLigaDB, Golf
 
 ## Provider Filtering
 
-By default, only the `free` preset is loaded (21 providers, 183 tools — no API keys needed).
-Set `SPORTS_HUB_PROVIDERS=all` for all 44 providers (430 tools), but that many tools can overwhelm LLMs.
+By default, only the `free` preset is loaded (21 providers, 185 tools — no API keys needed).
+Set `SPORTS_HUB_PROVIDERS=all` for all 44 providers (432 tools), but that many tools can overwhelm LLMs.
 Use `SPORTS_HUB_PROVIDERS` to control which providers are active.
 
 ### Presets (recommended)
@@ -151,10 +153,10 @@ Use `SPORTS_HUB_PROVIDERS` to control which providers are active.
 ### Usage
 
 ```bash
-# Default — free preset, 21 no-key providers, 183 tools
+# Default — free preset, 21 no-key providers, 185 tools
 node dist/index.js
 
-# All 44 providers (430 tools)
+# All 44 providers (432 tools)
 SPORTS_HUB_PROVIDERS=all node dist/index.js
 
 # Preset — recommended for most users
@@ -189,9 +191,9 @@ In Claude Desktop config:
 ### Why filter?
 
 LLMs work best with fewer, focused tools. Recommendations:
-- **General use**: `free` preset (21 providers, 183 tools)
+- **General use**: `free` preset (21 providers, 185 tools)
 - **Specific sport**: use the sport preset (`f1`, `soccer`, `esports`, etc.)
-- **Full access**: `SPORTS_HUB_PROVIDERS=all` (430 tools — works but slower tool selection)
+- **Full access**: `SPORTS_HUB_PROVIDERS=all` (432 tools — works but slower tool selection)
 
 ## Transport
 
@@ -237,6 +239,8 @@ src/shared/football-source.ts → Source resolution: odds archive first, keyless
 src/shared/openfootball.ts   → Keyless GitHub-hosted results/calendar mirror (no odds)
 src/providers/*.ts           → One file per API, exports register(server)
 scripts/season-tracker.mjs   → CLI loop: predict a round, log it, score it (npm run track)
+scripts/research-budget.mjs  → Append-only multiple-testing ledger (npm run budget)
+src/shared/evidence.ts       → The judge: six gates, Bonferroni bar, shrinkage → evidence card
 scripts/verify-sources.mjs   → Live check that the upstream sources still parse (npm run verify:sources)
 scripts/tune-model.mjs       → Train/validation search over model parameters (npm run tune)
 scripts/fetch-archive.mjs    → Fill data/football-data from a GitHub mirror with odds (npm run fetch:archive)

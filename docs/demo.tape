@@ -11,7 +11,7 @@ Set Shell bash
 Type "echo ''"
 Enter
 Sleep 300ms
-Type "echo '  ⚡ mcp-sports-hub — 44 providers, 430 tools, 70+ sports'"
+Type "echo '  ⚡ mcp-sports-hub — 44 providers, 432 tools, 70+ sports'"
 Enter
 Sleep 300ms
 Type "echo ''"

@@ -50,6 +50,40 @@ would be worth to bet at any price, only when you choose, at any stake.
   below, at any price and any frequency, the bankroll is 4 to 36 times the annual
   profit and the exercise is strictly worse than doing nothing.
 
+### Added — the judge, which is built to refuse
+
+New page: [docs/The-Judge.md](docs/The-Judge.md). Two tools and a ledger, on the
+principle that a system which cannot say no credibly will eventually say yes to
+noise.
+
+- **`trading_audit_signal`** — six gates on a claimed edge (sample size,
+  significance, the multiple-testing bar for the size of the search that found
+  it, out-of-sample result, closing-line value, survival of execution costs) →
+  an evidence card with status CANDIDATE, WATCH or NO SIGNAL, plus how much of
+  the point estimate the sample justifies staking.
+- **`trading_testing_bar`** — what a search of N hypotheses costs in evidence.
+  A hundredfold bigger search moves the bar about one point of t and needs 72%
+  more bets; a swarm that generates hypotheses faster than the season generates
+  matches can never clear its own bar.
+- **`npm run budget`** — an append-only multiple-testing ledger. A sweep costs
+  what it tests (`--count 606`, not 1), entries are registered before the result
+  is seen, and resolved entries cannot be rewritten. Seeded with the 907
+  hypotheses this repo has already spent across nine entries, nine rejected,
+  none validated — which puts the bar for any future finding at t >= 4.03.
+
+The worked example is this repo's own best result. Backing anything at or below
+1.50 at the best price (+2.45% train, +1.85% over 5,766 validation bets) scores
+**NO SIGNAL**: it passes sample, significance and out-of-sample, and fails on
+the multiple-testing bar (t 2.49 against 4.03) and on cost (+1.85% becomes
+-3.24% after a 5% exchange commission). With the search declared as one
+hypothesis and execution free, the same evidence scores CANDIDATE — asserted in
+the tests, because the pair is the whole argument.
+
+Writing the auditor found a bug in the auditor: the first version divided a
+percentage edge by a standard error in units of stake and reported t = 249 for
+that claim. An independent measurement of the same rule had it at 2.43. Fixed,
+with a regression test pinning the band.
+
 ### Changed
 
 - `trading_edge_requirements` now returns `ruin_risk_horizon`. Its ruin figures come

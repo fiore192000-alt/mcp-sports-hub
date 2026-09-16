@@ -1,6 +1,6 @@
 # Tools Reference
 
-Complete list of all **430 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
+Complete list of all **432 tools** grouped by provider. Parameters in **bold** are required; `?` marks optional.
 
 ---
 
@@ -836,7 +836,7 @@ date: formatted YYYYMMDD
 
 ---
 
-## Trading Toolkit (`trading_`) — 13 tools
+## Trading Toolkit (`trading_`) — 15 tools
 
 Local computation — no API key. `trading_backtest` and `trading_team_ratings` read the keyless football-data.co.uk archive; the rest work entirely on numbers you pass in.
 
@@ -857,6 +857,23 @@ Local computation — no API key. `trading_backtest` and `trading_team_ratings` 
 | `trading_edge_requirements` | The conditions a bet has to meet to make money, as arithmetic: the hit rate that breaks even, the hit rate your claimed edge implies, how many bets before that edge is distinguishable from luck, the Kelly stake, the risk of ruin at different staking speeds, and the losing run to expect anyway. Use it before trusting a record, and before sizing anything. | **odds**, edge_pct?, commission_pct?, bets_so_far? |
 
 ---
+
+### `trading_audit_signal`
+Audit a claimed edge before betting it, against six gates: sample size, significance, the multiple-testing bar for the size of the search that found it, out-of-sample result, closing-line value, and survival of execution costs. Returns an evidence card with a status of **CANDIDATE**, **WATCH** or **NO SIGNAL**. Built to refuse — on honest inputs nothing measured in this repository has reached CANDIDATE.
+- **label** — what is being claimed
+- **odds** — typical decimal odds the signal fires at
+- **claimed_edge_pct** — the edge you believe you have, % of stake
+- **bets_observed** — settled bets the estimate rests on
+- `hypotheses_tested?` — how many hypotheses the search has consumed (default 1; `npm run budget -- status` keeps the count)
+- `commission_pct?`, `execution_cost_pct?` — what the price actually costs you
+- `out_of_sample_bets?`, `out_of_sample_roi_pct?` — a period the signal was not chosen on
+- `clv_pct?` — closing-line value; positive means you beat the closing price
+- `prior_sd_pct?` — prior SD for shrinking the estimate (default 2)
+
+### `trading_testing_bar`
+The t-statistic a finding must clear once the search that produced it is charged for its own size, and how many bets that takes. Use it before mining: a swarm that generates hypotheses faster than it accumulates matches can never clear its own bar.
+- **hypotheses_tested** — how many hypotheses the search has consumed
+- `odds?` (default 2), `edge_pct?` (default 2), `alpha?` (default 0.05)
 
 ## Polymarket (`polymarket_`) — 7 tools
 

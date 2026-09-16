@@ -13,6 +13,7 @@ import {
   BASE_RATES, brierScore, logLoss, rankedProbabilityScore, type OutcomeIndex,
   applyMargin, edgeRequirements, type MarginMethod,
 } from "../shared/betting-math.js";
+import { auditSignal, bonferroniBar } from "../shared/evidence.js";
 
 // ---------------------------------------------------------------------------
 // Trading toolkit — 11 tools
@@ -1316,6 +1317,77 @@ export function register(server: McpServer): void {
         caveats: [
           n < 50 ? `${n} matches is a very small sample — RPS differences this size are mostly luck.` : "Keep adding matches: forecast skill only separates from noise over hundreds of them.",
           "Predictions must be made BEFORE kick-off for any of this to mean anything. Scoring a prediction generated after the result is self-deception, and nothing here can detect it.",
+        ],
+      });
+    }),
+  );
+
+  // 14. audit a claimed signal — the judge, which mostly says no
+  server.tool(
+    "trading_audit_signal",
+    "Audit a claimed edge before betting it: sample size, significance, the multiple-testing bar for the size of the search that found it, out-of-sample result, closing-line value, and whether it survives execution costs. Returns an evidence card with a status of CANDIDATE, WATCH or NO SIGNAL. Built to refuse: on honest inputs nothing measured in this repository has reached CANDIDATE.",
+    {
+      label: z.string().describe('What is being claimed, e.g. "home favourites under 1.50 at best price"'),
+      odds: z.number().gt(1).describe("Typical decimal odds the signal fires at"),
+      claimed_edge_pct: z.number().gt(0).max(100).describe("The edge you believe you have, % of stake"),
+      bets_observed: z.number().int().min(0).describe("Settled bets the estimate rests on"),
+      hypotheses_tested: z.number().int().min(1).optional().describe("How many hypotheses the search that produced this has consumed (default 1 — declare it honestly, this is the gate people skip). `npm run budget -- status` keeps the count."),
+      commission_pct: z.number().min(0).lt(100).optional().describe("Commission on winnings, % (default 0)"),
+      execution_cost_pct: z.number().min(0).max(50).optional().describe("Price erosion you actually expect at execution, % of the quoted price (default 0)"),
+      out_of_sample_bets: z.number().int().min(0).optional().describe("Bets in a period the signal was NOT chosen on"),
+      out_of_sample_roi_pct: z.number().optional().describe("ROI over those out-of-sample bets, %"),
+      clv_pct: z.number().optional().describe("Closing-line value, %. Positive means you beat the closing price."),
+      prior_sd_pct: z.number().gt(0).max(50).optional().describe("Prior SD for shrinking the estimate, percentage points (default 2 — the size of the best-price margin)"),
+    },
+    safe(async (a) => {
+      const oos = a.out_of_sample_bets !== undefined && a.out_of_sample_roi_pct !== undefined
+        ? { bets: a.out_of_sample_bets, roi_pct: a.out_of_sample_roi_pct }
+        : undefined;
+      const card = auditSignal({
+        label: a.label,
+        odds: a.odds,
+        claimed_edge_pct: a.claimed_edge_pct,
+        bets_observed: a.bets_observed,
+        commission_pct: a.commission_pct,
+        execution_cost_pct: a.execution_cost_pct,
+        hypotheses_tested: a.hypotheses_tested,
+        out_of_sample: oos,
+        clv_pct: a.clv_pct,
+        prior_sd_pct: a.prior_sd_pct,
+      });
+      return toolResult(card);
+    }),
+  );
+
+  // 15. what a search of a given size costs you
+  server.tool(
+    "trading_testing_bar",
+    "The t-statistic a finding must clear once the search that produced it is charged for its own size, and how many bets that takes. Use it before mining: a swarm that generates hypotheses faster than it accumulates matches can never clear its own bar.",
+    {
+      hypotheses_tested: z.number().int().min(1).max(1e7).describe("How many hypotheses the search has consumed"),
+      odds: z.number().gt(1).optional().describe("Typical decimal odds, for the bets-needed figure (default 2)"),
+      edge_pct: z.number().gt(0).max(100).optional().describe("The edge you would need to find, % (default 2)"),
+      alpha: z.number().gt(0).lt(1).optional().describe("Family-wise error rate (default 0.05)"),
+    },
+    safe(async ({ hypotheses_tested, odds, edge_pct, alpha }) => {
+      const o = odds ?? 2, e = edge_pct ?? 2;
+      const bar = bonferroniBar(hypotheses_tested, alpha ?? 0.05);
+      const req = edgeRequirements(o, e);
+      const betsAtBar = Math.ceil(req.bets_to_prove.one_sigma * bar ** 2);
+      return toolResult({
+        hypotheses_tested,
+        bonferroni_bar: round(bar, 3),
+        uncorrected_bar: 1.96,
+        odds: o,
+        edge_pct: e,
+        bets_needed_uncorrected: req.bets_to_prove.two_sigma,
+        bets_needed_at_this_bar: betsAtBar,
+        seasons_at_1000_bets: round(betsAtBar / 1000, 1),
+        verdict: `A search of ${hypotheses_tested} hypotheses needs t >= ${round(bar, 2)}, so a ${e}% edge at ${o} needs ${betsAtBar} settled bets instead of ${req.bets_to_prove.two_sigma} — ${round(betsAtBar / 1000, 1)} seasons at a thousand bets a year.`,
+        notes: [
+          "The bar grows with the logarithm of the search, which sounds forgiving and is not: it grows faster than any real dataset does.",
+          "Measured here: 606 mined patterns left six survivors that were all one idea, and 184 threshold cells left none, the largest validation t being 0.93 against a bar of 3.08.",
+          "Declaring a small number here does not make the search small. The count has to include every variant you looked at and discarded.",
         ],
       });
     }),
