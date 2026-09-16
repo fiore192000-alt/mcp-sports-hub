@@ -864,7 +864,8 @@ Audit a claimed edge before betting it, against six gates: sample size, signific
 - **odds** — typical decimal odds the signal fires at
 - **claimed_edge_pct** — the edge you believe you have, % of stake
 - **bets_observed** — settled bets the estimate rests on
-- `hypotheses_tested?` — how many hypotheses the search has consumed (default 1; `npm run budget -- status` keeps the count)
+- `research_token?` — token from `npm run budget -- register`. Without one the multiple-testing gate stays shut and the claim cannot reach CANDIDATE
+- `hypotheses_tested?` — self-declared count, ignored when a valid token is given
 - `commission_pct?`, `execution_cost_pct?` — what the price actually costs you
 - `out_of_sample_bets?`, `out_of_sample_roi_pct?` — a period the signal was not chosen on
 - `clv_pct?` — closing-line value; positive means you beat the closing price

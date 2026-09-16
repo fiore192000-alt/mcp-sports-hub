@@ -94,6 +94,20 @@ export interface SignalClaim {
   clv_pct?: number;
   /** Prior SD for shrinkage, in percentage points (default 2 — the size of the best-price margin). */
   prior_sd_pct?: number;
+  /**
+   * Proof that the hypothesis was written down before the result was seen,
+   * from `npm run budget -- register`. Without it the search size is
+   * self-declared, and a self-declared count is not a small one — it is an
+   * unknown one, so the multiple-testing gate cannot pass.
+   */
+  registration?: {
+    verified: boolean;
+    reason?: string;
+    hypothesis?: string;
+    registered_at?: string;
+    /** Hypotheses the whole search has consumed, read from the ledger. */
+    ledger_consumed?: number;
+  };
 }
 
 export interface Gate {
@@ -115,6 +129,9 @@ export interface EvidenceCard {
   bets_needed_two_sigma: number;
   observed_t_stat: number;
   hypotheses_tested: number;
+  /** Whether that count was verified against the ledger or supplied by the caller. */
+  hypotheses_source: "ledger" | "self-declared";
+  registered_at?: string;
   bonferroni_bar: number;
   /** What the estimate justifies staking, once shrunk toward the prior. */
   shrinkage: { weight: number; shrunk_edge_pct: number; quarter_kelly_stake_pct: number };
@@ -132,7 +149,7 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
   const {
     label, odds, claimed_edge_pct: edge, bets_observed: n,
     commission_pct = 0, execution_cost_pct = 0,
-    hypotheses_tested = 1, out_of_sample, clv_pct, prior_sd_pct = 2,
+    hypotheses_tested = 1, out_of_sample, clv_pct, prior_sd_pct = 2, registration,
   } = claim;
 
   const commission = commission_pct / 100;
@@ -144,7 +161,15 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
   const sdPct = perBetSd(odds, edge, commission) * 100;
   const sePct = n > 0 ? sdPct / Math.sqrt(n) : Infinity;
   const t = n > 0 ? edge / sePct : 0;
-  const bar = bonferroniBar(hypotheses_tested);
+  // The count comes off the ledger when there is one. A caller's own figure is
+  // used for the arithmetic so the card is still informative, but it cannot
+  // open the gate: understating it is the single easiest way to manufacture a
+  // finding, and it is the one people do without noticing.
+  const registered = registration?.verified === true;
+  const effectiveK = registered && registration?.ledger_consumed
+    ? registration.ledger_consumed
+    : hypotheses_tested;
+  const bar = bonferroniBar(effectiveK);
 
   // Execution erosion is a cut of the price, so it costs (1 + edge) x cut.
   const cut = execution_cost_pct / 100;
@@ -175,10 +200,10 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
     },
     {
       gate: "multiple_tests",
-      passed: t >= bar,
-      detail: hypotheses_tested <= 1
-        ? `t = ${t.toFixed(2)} against 1.96, and this is declared as the only hypothesis tested. If it is not, the bar is higher and this gate is meaningless.`
-        : `t = ${t.toFixed(2)} against ${bar.toFixed(2)}, the bar after charging the search for ${hypotheses_tested} hypotheses.`,
+      passed: registered && t >= bar,
+      detail: registered
+        ? `t = ${t.toFixed(2)} against ${bar.toFixed(2)}, the bar after charging the search for ${effectiveK} hypotheses — read from the ledger, where this was registered on ${registration?.registered_at?.slice(0, 10)}.`
+        : `t = ${t.toFixed(2)} against ${bar.toFixed(2)} on a self-declared count of ${hypotheses_tested}. ${registration?.reason ?? "No registration token supplied."} An undeclared search size is not a small one, it is an unknown one, so this gate stays shut.`,
     },
     {
       gate: "out_of_sample",
@@ -225,7 +250,9 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
     bets_observed: n,
     bets_needed_two_sigma: req.bets_to_prove.two_sigma,
     observed_t_stat: Number(t.toFixed(3)),
-    hypotheses_tested,
+    hypotheses_tested: effectiveK,
+    hypotheses_source: registered ? "ledger" : "self-declared",
+    registered_at: registration?.registered_at,
     bonferroni_bar: Number(bar.toFixed(3)),
     shrinkage: {
       weight: Number(weight.toFixed(4)),
@@ -238,7 +265,7 @@ export function auditSignal(claim: SignalClaim): EvidenceCard {
       `The sample justifies staking ${(weight * 100).toFixed(1)}% of what the point estimate suggests. Kelly assumes you know the edge; you have measured it.`,
       "A real +2% edge at price 2.0, sized full Kelly on a 200-bet measurement of itself, returns -18.6 basis points a bet and halves the bank 62.5% of the time. Not betting leaves you whole.",
       status === "CANDIDATE"
-        ? "CANDIDATE is not a bet. It means the claim survived the gates it was given — which is only as strong as the hypothesis count you declared."
+        ? "CANDIDATE is not a bet. It means the claim survived its gates against a hypothesis count taken from the ledger — which still cannot prove the hypothesis was written down before the result was read."
         : "This is the expected outcome. Over 606 mined patterns and 184 threshold cells, nothing in this repository has reached CANDIDATE on honest inputs.",
     ],
   };

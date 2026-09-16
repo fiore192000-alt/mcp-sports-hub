@@ -2,6 +2,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { auditSignal, bonferroniBar, normalQuantile, perBetSd } from "../../dist/shared/evidence.js";
 
+/** A registration the ledger would have produced, for tests that need one. */
+const registered = (k, at = "2026-01-01T00:00:00.000Z") =>
+  ({ verified: true, hypothesis: "x", registered_at: at, ledger_consumed: k });
+
 const close = (a, b, tol, msg) =>
   assert.ok(Math.abs(a - b) <= tol, `${msg}: expected ${b} +/- ${tol}, got ${a}`);
 
@@ -105,18 +109,48 @@ describe("auditSignal", () => {
   });
 
   it("would pass the same finding if the search had been small and the price free", () => {
-    const card = auditSignal({ ...realFinding, hypotheses_tested: 1, execution_cost_pct: 0, clv_pct: 0.5 });
+    const card = auditSignal({ ...realFinding, execution_cost_pct: 0, clv_pct: 0.5, registration: registered(1) });
     assert.equal(card.status, "CANDIDATE");
     assert.ok(card.gates.every((g) => g.passed));
+    assert.equal(card.hypotheses_source, "ledger");
   });
 
   it("charges the search: the same evidence fails once the ledger is honest", () => {
-    const small = auditSignal({ ...realFinding, hypotheses_tested: 1, execution_cost_pct: 0, clv_pct: 0.5 });
-    const large = auditSignal({ ...realFinding, hypotheses_tested: 907, execution_cost_pct: 0, clv_pct: 0.5 });
+    const clean = { ...realFinding, execution_cost_pct: 0, clv_pct: 0.5 };
+    const small = auditSignal({ ...clean, registration: registered(1) });
+    const large = auditSignal({ ...clean, registration: registered(907) });
     assert.equal(small.status, "CANDIDATE");
     assert.equal(large.status, "WATCH");
     assert.ok(large.bonferroni_bar > small.bonferroni_bar);
     assert.equal(small.observed_t_stat, large.observed_t_stat, "the evidence did not change, only the charge for it");
+  });
+
+  it("will not open the multiple-testing gate on a count the caller supplied itself", () => {
+    // The whole point of the gate. Identical evidence, identical claimed count
+    // of one: verified reaches CANDIDATE, self-declared cannot.
+    const clean = { ...realFinding, execution_cost_pct: 0, clv_pct: 0.5 };
+    const declared = auditSignal({ ...clean, hypotheses_tested: 1 });
+    const verified = auditSignal({ ...clean, registration: registered(1) });
+    assert.equal(declared.status, "WATCH");
+    assert.equal(verified.status, "CANDIDATE");
+    assert.equal(declared.hypotheses_source, "self-declared");
+    assert.equal(declared.observed_t_stat, verified.observed_t_stat);
+    assert.match(declared.gates.find((g) => g.gate === "multiple_tests").detail, /unknown one/);
+  });
+
+  it("reads the count off the ledger and ignores a flattering one from the caller", () => {
+    const card = auditSignal({ ...realFinding, hypotheses_tested: 1, registration: registered(907) });
+    assert.equal(card.hypotheses_tested, 907, "the caller's 1 must not win");
+    close(card.bonferroni_bar, 4.033, 0.01, "the bar is the ledger's");
+  });
+
+  it("carries a failed verification's reason into the card", () => {
+    const card = auditSignal({
+      ...realFinding,
+      registration: { verified: false, reason: "Token h9-abc matches no entry in the ledger." },
+    });
+    assert.match(card.gates.find((g) => g.gate === "multiple_tests").detail, /matches no entry/);
+    assert.notEqual(card.status, "CANDIDATE");
   });
 
   it("treats a missing out-of-sample result as a failure, not as an absence", () => {

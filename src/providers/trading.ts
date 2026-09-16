@@ -14,6 +14,7 @@ import {
   applyMargin, edgeRequirements, type MarginMethod,
 } from "../shared/betting-math.js";
 import { auditSignal, bonferroniBar } from "../shared/evidence.js";
+import { consumed, readLedger, verifyToken } from "../shared/research-ledger.js";
 
 // ---------------------------------------------------------------------------
 // Trading toolkit — 11 tools
@@ -1331,7 +1332,8 @@ export function register(server: McpServer): void {
       odds: z.number().gt(1).describe("Typical decimal odds the signal fires at"),
       claimed_edge_pct: z.number().gt(0).max(100).describe("The edge you believe you have, % of stake"),
       bets_observed: z.number().int().min(0).describe("Settled bets the estimate rests on"),
-      hypotheses_tested: z.number().int().min(1).optional().describe("How many hypotheses the search that produced this has consumed (default 1 — declare it honestly, this is the gate people skip). `npm run budget -- status` keeps the count."),
+      research_token: z.string().optional().describe("Token from `npm run budget -- register`, proving the hypothesis was written down. Without one the multiple-testing gate stays shut and the claim cannot reach CANDIDATE."),
+      hypotheses_tested: z.number().int().min(1).optional().describe("How many hypotheses the search has consumed. Ignored when a valid research_token is given — the count is then read off the ledger instead of taken from you."),
       commission_pct: z.number().min(0).lt(100).optional().describe("Commission on winnings, % (default 0)"),
       execution_cost_pct: z.number().min(0).max(50).optional().describe("Price erosion you actually expect at execution, % of the quoted price (default 0)"),
       out_of_sample_bets: z.number().int().min(0).optional().describe("Bets in a period the signal was NOT chosen on"),
@@ -1343,7 +1345,9 @@ export function register(server: McpServer): void {
       const oos = a.out_of_sample_bets !== undefined && a.out_of_sample_roi_pct !== undefined
         ? { bets: a.out_of_sample_bets, roi_pct: a.out_of_sample_roi_pct }
         : undefined;
+      const registration = a.research_token ? verifyToken(a.research_token, a.label) : undefined;
       const card = auditSignal({
+        registration,
         label: a.label,
         odds: a.odds,
         claimed_edge_pct: a.claimed_edge_pct,
@@ -1355,7 +1359,10 @@ export function register(server: McpServer): void {
         clv_pct: a.clv_pct,
         prior_sd_pct: a.prior_sd_pct,
       });
-      return toolResult(card);
+      return toolResult({
+        ...card,
+        ledger: { entries: readLedger().length, hypotheses_consumed: consumed(readLedger()) },
+      });
     }),
   );
 

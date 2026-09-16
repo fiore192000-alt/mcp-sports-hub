@@ -65,6 +65,13 @@ noise.
   A hundredfold bigger search moves the bar about one point of t and needs 72%
   more bets; a swarm that generates hypotheses faster than the season generates
   matches can never clear its own bar.
+- **The gate.** Registering issues a token; `trading_audit_signal` takes it,
+  verifies it, and reads the hypothesis count off the ledger rather than off the
+  caller. Without a valid token the multiple-testing gate stays shut, so an
+  unregistered claim can be audited but can never reach CANDIDATE — an
+  undeclared search size is not a small one, it is an unknown one. The token is
+  a hash over the entry, so tampering with any field invalidates it, and a token
+  pointed at an unrelated claim is refused by name.
 - **`npm run budget`** — an append-only multiple-testing ledger. A sweep costs
   what it tests (`--count 606`, not 1), entries are registered before the result
   is seen, and resolved entries cannot be rewritten. Seeded with the 907

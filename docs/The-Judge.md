@@ -38,6 +38,9 @@ npm run budget -- resolve 12 --verdict rejected --note "negative out of sample"
 npm run budget -- status
 ```
 
+Registering issues a **token**, and the token is what makes the ledger binding
+rather than advisory — see *The gate* below.
+
 Three properties make it work, and all three are inconvenient on purpose:
 
 - **Registration happens before you see the result.** Nothing in software can
@@ -58,6 +61,36 @@ Bar for any finding from this search: t >= 4.033 (uncorrected 1.96)
 
 Nine entries, 907 hypotheses, nine rejections, nothing validated. That is not
 a failure of the research; it is the research.
+
+## The gate
+
+A ledger nobody has to consult is a diary. The gate makes it load-bearing:
+`trading_audit_signal` takes the `research_token` that registration issued,
+looks it up, and reads the hypothesis count **off the ledger rather than off
+the caller**. Without a valid token the multiple-testing gate stays shut, so an
+unregistered claim can be audited but can never reach CANDIDATE.
+
+An undeclared search size is not a small one. It is an unknown one.
+
+The token is a hash over the entry — its id, the hypothesis text, the moment it
+was written down, and what it counts as — so changing any of those invalidates
+it. Four ways it refuses, all of them tested:
+
+| Attempt | Result |
+|---|---|
+| No token, claiming this was the only hypothesis | `self-declared`, gate shut, capped at WATCH |
+| A token that matches no entry | rejected by name |
+| A real token pointed at an unrelated claim | rejected, and it says which hypothesis the token was for |
+| A real token for the right claim | `ledger`, count 908, bar 4.03 — the honest bar |
+
+The label match is deliberately loose. Wording drifts between registering an
+idea and writing it up, and a strict comparison would only teach people to
+paste; it catches the case that matters, which is auditing something unrelated
+to what was registered.
+
+What it still cannot do is prove the hypothesis was written down *before* the
+result was read. Forging a token means editing `research/hypotheses.json` by
+hand, which is the point: it turns a lapse of memory into a deliberate act.
 
 ## The auditor — `trading_audit_signal`
 
@@ -102,14 +135,16 @@ supplies half of all best prices — turns the whole thing negative before a
 single bet is placed.
 
 Change the inputs to a world where the search was small and execution free, and
-the same evidence passes:
+the same evidence passes — but only with a token proving the count:
 
 ```
-hypotheses_tested: 1, execution_cost_pct: 0, clv_pct: +0.5  →  CANDIDATE
+registered(1), execution_cost_pct: 0, clv_pct: +0.5   →  CANDIDATE
+hypotheses_tested: 1 self-declared, same everything else  →  WATCH
 ```
 
-The evidence did not change. Only the honesty of the accounting did. That pair
-of results is asserted in the test suite, because it is the entire argument.
+The evidence did not change in either direction. Only the accounting did, and
+in the second case only the *claim* about the accounting. Both pairs are
+asserted in the test suite, because they are the entire argument.
 
 ### Shrinkage, so a card cannot be read as a stake
 
@@ -141,6 +176,8 @@ only fix is to test fewer things.
 
 It does not detect a hypothesis registered after the fact, it does not know
 whether your out-of-sample period was really out of sample, and it cannot tell
-an execution cost you guessed from one you measured. Every gate is only as
+an execution cost you guessed from one you measured. The gate closes the one
+hole that can be closed mechanically — a search size supplied by the party it
+flatters — and the rest is on you. Every gate is only as
 honest as its input. The machinery makes dishonesty explicit and deliberate
 rather than accidental — which is the most any of it can do.

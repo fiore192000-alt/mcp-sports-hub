@@ -4,7 +4,12 @@
  *
  *   npm run budget -- register "<hypothesis>" [--count N] [--scope "19 leagues, 0506-2627"]
  *   npm run budget -- resolve <id> --verdict validated|rejected [--note "..."]
+ *   npm run budget -- token <id>
  *   npm run budget -- status [--odds 2] [--edge 2]
+ *
+ * Registering issues a TOKEN. trading_audit_signal needs it: without one the
+ * multiple-testing gate stays shut, because a count the caller supplied itself
+ * is not a small search, it is an unknown one.
  *
  * A research swarm that is not charged for the size of its own search will
  * always find something. This file is the charge. Every hypothesis you test is
@@ -17,6 +22,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -68,6 +74,10 @@ function normalQuantile(p) {
   q = p - 0.5; r = q * q;
   return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5]) * q / (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
 }
+/** Must match tokenFor() in src/shared/research-ledger.ts. */
+const tokenFor = (e) =>
+  `h${e.id}-${createHash("sha256").update(`${e.id}|${e.hypothesis}|${e.registered_at}|${e.count ?? 1}`).digest("hex").slice(0, 12)}`;
+
 const bar = (k, alpha = 0.05) => normalQuantile(1 - alpha / (2 * Math.max(1, k)));
 /** Total hypotheses charged, where a sweep registered once may count as many. */
 const consumed = (rows) => rows.reduce((n, r) => n + (Number.isInteger(r.count) && r.count > 0 ? r.count : 1), 0);
@@ -108,6 +118,8 @@ if (cmd === "register") {
   if (row.scope) console.log(`  scope: ${row.scope}`);
   console.log(`\nHypotheses consumed: ${k}`);
   console.log(`Every finding from here on must clear t >= ${bar(k).toFixed(3)} (was ${bar(before).toFixed(3)}).`);
+  console.log(`\nToken: ${tokenFor(row)}`);
+  console.log("Pass it to trading_audit_signal as research_token. Without it the multiple-testing gate stays shut.");
   process.exit(0);
 }
 
@@ -127,6 +139,14 @@ if (cmd === "resolve") {
   row.resolved_at = new Date().toISOString();
   save(rows);
   console.log(`#${id} -> ${verdict}${row.note ? ` (${row.note})` : ""}`);
+  process.exit(0);
+}
+
+if (cmd === "token") {
+  const id = Number(argv[1]);
+  const row = load().find((r) => r.id === id);
+  if (!row) { console.error(`No hypothesis #${argv[1]}.`); process.exit(1); }
+  console.log(tokenFor(row));
   process.exit(0);
 }
 
@@ -156,5 +176,5 @@ if (cmd === "status" || cmd === undefined) {
   process.exit(0);
 }
 
-console.error(`Unknown command "${cmd}". Use register, resolve or status.`);
+console.error(`Unknown command "${cmd}". Use register, resolve, token or status.`);
 process.exit(1);

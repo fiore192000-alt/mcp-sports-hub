@@ -88,5 +88,15 @@
     "verdict": "rejected",
     "note": "no trend across season phases; hypothesis dead",
     "resolved_at": "2026-09-16T09:35:46.766Z"
+  },
+  {
+    "id": 10,
+    "registered_at": "2026-09-16T09:43:46.291Z",
+    "hypothesis": "Do steam moves above 5% on away favourites beat the closing line?",
+    "count": 1,
+    "scope": "test of the gate",
+    "verdict": null,
+    "note": null,
+    "resolved_at": null
   }
 ]
