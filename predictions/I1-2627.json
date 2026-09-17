@@ -392,7 +392,8 @@
     "markets": "both"
   },
   "last_scored": {
-    "at": "2026-09-15T11:28:34.771Z",
-    "scored": 0
+    "at": "2026-09-17T07:01:44.779Z",
+    "scored": 0,
+    "pending": 10
   }
 }

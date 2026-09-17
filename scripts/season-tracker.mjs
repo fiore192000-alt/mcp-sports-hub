@@ -123,12 +123,29 @@ async function score() {
       console.log(`\n=== ${league} ${season} — nothing logged yet. Run "predict" first. ===`);
       continue;
     }
+    const live = log.predictions.filter((p) => !p.superseded_at);
+    // Score against the source the predictions were MADE from, unless the
+    // caller names one. The two sources spell teams differently ("Inter" vs
+    // "FC Internazionale Milano"), so scoring openfootball predictions against
+    // footballdata matches nothing — and reports it as "no results yet", which
+    // is indistinguishable from the matches not having been played. That is a
+    // silent failure of the only test that matters, on the one weekend it
+    // matters, so the default follows the log rather than the global `auto`.
+    const logged = [...new Set(live.map((p) => p.source).filter(Boolean))];
+    const scoringSource = argv.includes("--source") ? source
+      : logged.length === 1 ? logged[0]
+      : source;
+    if (scoringSource !== source && logged.length === 1) {
+      console.log(`scoring against "${scoringSource}" because that is what these predictions were made from (pass --source to override)`);
+    } else if (logged.length > 1) {
+      console.log(`warning: this log mixes sources (${logged.join(", ")}). Team names differ between them, so some rows will not match. Split the log or score with --source.`);
+    }
     const report = await call("trading_score_predictions", {
-      predictions: log.predictions.filter((p) => !p.superseded_at).map(({ date, league: lg, home, away, prob_home, prob_draw, prob_away, market_odds, pick }) => ({
+      predictions: live.map(({ date, league: lg, home, away, prob_home, prob_draw, prob_away, market_odds, pick }) => ({
         date, league: lg ?? league, home, away, prob_home, prob_draw, prob_away,
         ...(market_odds ? { market_odds } : {}), ...(pick ? { pick } : {}),
       })),
-      season, source, sample: 60,
+      season, source: scoringSource, sample: 60,
     });
     render(`${league} ${season} — logged predictions`, report);
     log.last_scored = { at: new Date().toISOString(), scored: report.scored, pending: report.pending_count, rps: report.probability_scores?.rps };
